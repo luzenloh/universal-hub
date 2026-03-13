@@ -54,7 +54,7 @@ async def shift_take_token(callback: CallbackQuery, session: AsyncSession) -> No
         f"Токен назначен!\n\n"
         f"<b>{token.name}</b>\n<code>{token.value}</code>",
         parse_mode="HTML",
-        reply_markup=active_token_keyboard(),
+        reply_markup=active_token_keyboard(token.profile_url),
     )
     await callback.answer("Готово!")
 
