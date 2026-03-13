@@ -12,7 +12,7 @@ class Token(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(Text, nullable=False)
     value: Mapped[str] = mapped_column(Text, nullable=False)
-    profile_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    profile_id: Mapped[str | None] = mapped_column(Text, nullable=True)  # GoLogin profile ID
     is_free: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     assigned_to: Mapped[int | None] = mapped_column(Integer, nullable=True)
     assigned_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

@@ -23,7 +23,7 @@ async def cmd_start(message: Message, session: AsyncSession) -> None:
             f"У вас активный токен:\n\n"
             f"<b>{token.name}</b>\n<code>{token.value}</code>",
             parse_mode="HTML",
-            reply_markup=active_token_keyboard(token.profile_url),
+            reply_markup=active_token_keyboard(token.profile_id),
         )
     else:
         await message.answer(

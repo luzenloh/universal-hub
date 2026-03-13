@@ -10,10 +10,10 @@ def main_menu_keyboard() -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def active_token_keyboard(profile_url: str | None = None) -> InlineKeyboardMarkup:
+def active_token_keyboard(profile_id: str | None = None) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
-    if profile_url:
-        builder.button(text="🌐 Открыть профиль", url=profile_url)
+    if profile_id:
+        builder.button(text="🚀 Запустить профиль", callback_data="shift:launch")
     builder.button(text="Освободить токен", callback_data="shift:release")
     builder.adjust(1)
     return builder.as_markup()

@@ -4,6 +4,7 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     bot_token: str
     database_url: str = "sqlite+aiosqlite:///./gologin.db"
+    gologin_api_token: str = ""
 
     class Config:
         env_file = ".env"
