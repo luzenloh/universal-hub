@@ -4,10 +4,13 @@ from aiogram import F, Router
 from aiogram.types import CallbackQuery
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.core.config import ADMIN_USERNAME
+import httpx
+
+from bot.core.config import ADMIN_USERNAME, settings
 from bot.db.repository import TokenRepository
 from bot.keyboards.builder import active_token_keyboard, main_menu_keyboard, token_info_keyboard, token_list_keyboard
 from bot.services.browser import BrowserService
+from bot.services.gologin import GoLoginService
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -139,8 +142,31 @@ async def shift_launch_profile(callback: CallbackQuery, session: AsyncSession) -
         await callback.answer("Активный токен не найден.", show_alert=True)
         return
 
-    await callback.answer("Запускаем браузер…")
+    # GoLogin cloud launch if profile_id is set and API token is configured
+    if token.profile_id and settings.gologin_api_token:
+        await callback.answer("Запускаем GoLogin профиль…")
+        try:
+            service = GoLoginService(settings.gologin_api_token)
+            result = await service.start_profile(token.profile_id)
+            ws_url = result.get("wsUrl") or result.get("debuggerAddress") or str(result)
+            await callback.message.answer(  # type: ignore[union-attr]
+                f"✅ GoLogin профиль <b>{token.name}</b> запущен.\n\n"
+                f"WebSocket URL:\n<code>{ws_url}</code>",
+                parse_mode="HTML",
+            )
+        except httpx.HTTPStatusError as e:
+            logger.error("GoLogin API error: %s — %s", e.response.status_code, e.response.text)
+            await callback.message.answer(  # type: ignore[union-attr]
+                f"❌ GoLogin API ошибка {e.response.status_code}:\n<code>{e.response.text}</code>",
+                parse_mode="HTML",
+            )
+        except Exception as e:
+            logger.error("GoLogin launch error: %s", e)
+            await callback.message.answer(f"❌ Ошибка: {e}")  # type: ignore[union-attr]
+        return
 
+    # Fallback — local Chrome with anti-detect
+    await callback.answer("Запускаем локальный браузер…")
     try:
         ws_url = await BrowserService.launch(
             token.id,
@@ -149,7 +175,7 @@ async def shift_launch_profile(callback: CallbackQuery, session: AsyncSession) -
         )
         proxy_line = f"\n🔒 Прокси: <code>{token.proxy}</code>" if token.proxy else "\n⚠️ Прокси не задан"
         await callback.message.answer(  # type: ignore[union-attr]
-            f"✅ Браузер <b>{token.name}</b> запущен.{proxy_line}\n\n"
+            f"✅ Локальный Chrome <b>{token.name}</b> запущен.{proxy_line}\n\n"
             f"WebSocket URL:\n<code>{ws_url}</code>",
             parse_mode="HTML",
         )
