@@ -154,10 +154,16 @@ async def shift_launch_profile(callback: CallbackQuery, session: AsyncSession) -
                 f"WebSocket URL:\n<code>{ws_url}</code>",
                 parse_mode="HTML",
             )
+        except httpx.ConnectError:
+            await callback.message.answer(  # type: ignore[union-attr]
+                "❌ GoLogin Desktop не отвечает на localhost:36912.\n"
+                "Убедись, что приложение GoLogin <b>открыто</b> на этом компьютере.",
+                parse_mode="HTML",
+            )
         except httpx.HTTPStatusError as e:
             logger.error("GoLogin API error: %s — %s", e.response.status_code, e.response.text)
             await callback.message.answer(  # type: ignore[union-attr]
-                f"❌ GoLogin API ошибка {e.response.status_code}:\n<code>{e.response.text}</code>",
+                f"❌ GoLogin ошибка {e.response.status_code}:\n<code>{e.response.text}</code>",
                 parse_mode="HTML",
             )
         except Exception as e:
