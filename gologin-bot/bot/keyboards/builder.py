@@ -1,4 +1,4 @@
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from bot.db.models import Token
@@ -19,6 +19,9 @@ def active_token_keyboard() -> InlineKeyboardMarkup:
 def token_list_keyboard(tokens: list[Token]) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     for token in tokens:
-        builder.button(text=token.name, callback_data=f"shift:take:{token.id}")
+        if token.is_free:
+            builder.button(text=f"✅ {token.name}", callback_data=f"shift:take:{token.id}")
+        else:
+            builder.button(text=f"❌ {token.name}", callback_data="shift:taken")
     builder.adjust(1)
     return builder.as_markup()

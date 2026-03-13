@@ -19,10 +19,8 @@ class TokenRepository:
         )
         return result.scalar_one_or_none()
 
-    async def get_free_tokens(self) -> list[Token]:
-        result = await self.session.execute(
-            select(Token).where(Token.is_free == True).order_by(Token.id)  # noqa: E712
-        )
+    async def get_all_tokens(self) -> list[Token]:
+        result = await self.session.execute(select(Token).order_by(Token.id))
         return list(result.scalars().all())
 
     async def assign_token(self, token_id: int, user_id: int) -> Token | None:

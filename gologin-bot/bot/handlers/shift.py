@@ -14,10 +14,10 @@ router = Router()
 @router.callback_query(F.data == "shift:start")
 async def shift_start(callback: CallbackQuery, session: AsyncSession) -> None:
     repo = TokenRepository(session)
-    tokens = await repo.get_free_tokens()
+    tokens = await repo.get_all_tokens()
 
     if not tokens:
-        await callback.answer("Нет свободных токенов, попробуй позже.", show_alert=True)
+        await callback.answer("Профили не найдены.", show_alert=True)
         return
 
     await callback.message.edit_text(  # type: ignore[union-attr]
@@ -25,6 +25,11 @@ async def shift_start(callback: CallbackQuery, session: AsyncSession) -> None:
         reply_markup=token_list_keyboard(tokens),
     )
     await callback.answer()
+
+
+@router.callback_query(F.data == "shift:taken")
+async def shift_taken(callback: CallbackQuery) -> None:
+    await callback.answer("Профиль занят, выбери другой.", show_alert=True)
 
 
 @router.callback_query(F.data.startswith("shift:take:"))
@@ -36,19 +41,13 @@ async def shift_take_token(callback: CallbackQuery, session: AsyncSession) -> No
     token = await repo.assign_token(token_id, user_id)
 
     if token is None:
-        # Token was taken by someone else — refresh the list
-        tokens = await repo.get_free_tokens()
-        if not tokens:
-            await callback.message.edit_text(  # type: ignore[union-attr]
-                "Токен уже занят. Свободных токенов больше нет, попробуй позже.",
-                reply_markup=main_menu_keyboard(),
-            )
-        else:
-            await callback.message.edit_text(  # type: ignore[union-attr]
-                "Токен уже занят. Выбери другой:",
-                reply_markup=token_list_keyboard(tokens),
-            )
-        await callback.answer("Токен уже занят!", show_alert=True)
+        # Token was taken by someone else between list render and click — refresh
+        tokens = await repo.get_all_tokens()
+        await callback.message.edit_text(  # type: ignore[union-attr]
+            "Профиль уже занят. Выбери другой:",
+            reply_markup=token_list_keyboard(tokens),
+        )
+        await callback.answer("Профиль уже занят!", show_alert=True)
         return
 
     await callback.message.edit_text(  # type: ignore[union-attr]
