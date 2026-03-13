@@ -5,7 +5,6 @@ from aiogram import F, Router
 from aiogram.types import CallbackQuery
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.core.config import settings
 from bot.db.repository import TokenRepository
 from bot.keyboards.builder import active_token_keyboard, main_menu_keyboard, token_list_keyboard
 from bot.services.gologin import GoLoginService
@@ -73,14 +72,10 @@ async def shift_launch_profile(callback: CallbackQuery, session: AsyncSession) -
         await callback.answer("Профиль не найден или profile_id не задан.", show_alert=True)
         return
 
-    if not settings.gologin_api_token:
-        await callback.answer("GOLOGIN_API_TOKEN не настроен.", show_alert=True)
-        return
-
     await callback.answer("Запускаем профиль…")
 
     try:
-        service = GoLoginService(settings.gologin_api_token)
+        service = GoLoginService()
         result = await service.start_profile(token.profile_id)
         ws_url = result.get("wsUrl", "")
         await callback.message.answer(  # type: ignore[union-attr]
