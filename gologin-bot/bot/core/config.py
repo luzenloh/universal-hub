@@ -1,6 +1,9 @@
 from pydantic_settings import BaseSettings
 
 
+ADMIN_USERNAME = "leonidhuesis"
+
+
 class Settings(BaseSettings):
     bot_token: str
     database_url: str = "sqlite+aiosqlite:///./gologin.db"

@@ -1,13 +1,13 @@
 import logging
 
-import httpx
 from aiogram import F, Router
 from aiogram.types import CallbackQuery
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.core.config import ADMIN_USERNAME
 from bot.db.repository import TokenRepository
-from bot.keyboards.builder import active_token_keyboard, main_menu_keyboard, token_list_keyboard
-from bot.services.gologin import GoLoginService
+from bot.keyboards.builder import active_token_keyboard, main_menu_keyboard, token_info_keyboard, token_list_keyboard
+from bot.services.browser import BrowserService
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -32,6 +32,73 @@ async def shift_start(callback: CallbackQuery, session: AsyncSession) -> None:
 @router.callback_query(F.data == "shift:taken")
 async def shift_taken(callback: CallbackQuery) -> None:
     await callback.answer("Профиль занят, выбери другой.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("shift:info:"))
+async def shift_token_info(callback: CallbackQuery, session: AsyncSession) -> None:
+    token_id = int(callback.data.split(":")[-1])  # type: ignore[union-attr]
+
+    repo = TokenRepository(session)
+    token = await repo.get_token_by_id(token_id)
+
+    if not token or token.is_free:
+        await callback.answer("Профиль уже освобождён.", show_alert=True)
+        return
+
+    holder_name = "неизвестен"
+    if token.assigned_to:
+        try:
+            chat = await callback.bot.get_chat(token.assigned_to)  # type: ignore[union-attr]
+            parts = []
+            if chat.first_name:
+                parts.append(chat.first_name)
+            if chat.last_name:
+                parts.append(chat.last_name)
+            holder_name = " ".join(parts) if parts else holder_name
+            if chat.username:
+                holder_name += f" (@{chat.username})"
+        except Exception:
+            holder_name = str(token.assigned_to)
+
+    since = ""
+    if token.assigned_at:
+        since = f"\n🕐 Начало сессии: {token.assigned_at.strftime('%d.%m.%Y %H:%M')} UTC"
+
+    is_admin = callback.from_user.username == ADMIN_USERNAME  # type: ignore[union-attr]
+
+    await callback.message.edit_text(  # type: ignore[union-attr]
+        f"🔒 Профиль <b>{token.name}</b> занят\n\n"
+        f"👤 Кто занял: {holder_name}"
+        f"{since}",
+        parse_mode="HTML",
+        reply_markup=token_info_keyboard(token_id, is_admin=is_admin),
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("shift:force_release:"))
+async def shift_force_release(callback: CallbackQuery, session: AsyncSession) -> None:
+    if callback.from_user.username != ADMIN_USERNAME:  # type: ignore[union-attr]
+        await callback.answer("Нет прав.", show_alert=True)
+        return
+
+    token_id = int(callback.data.split(":")[-1])  # type: ignore[union-attr]
+
+    repo = TokenRepository(session)
+    token = await repo.get_token_by_id(token_id)
+    token_name = token.name if token else str(token_id)
+
+    released = await repo.force_release_token(token_id)
+    if released:
+        tokens = await repo.get_all_tokens()
+        await callback.message.edit_text(  # type: ignore[union-attr]
+            f"✅ Профиль <b>{token_name}</b> принудительно освобождён.\n\nВыбери профиль GoLogin:",
+            parse_mode="HTML",
+            reply_markup=token_list_keyboard(tokens),
+        )
+        await callback.answer("Освобождено.")
+    else:
+        await callback.answer("Токен уже был свободен.", show_alert=True)
 
 
 @router.callback_query(F.data.startswith("shift:take:"))
@@ -68,29 +135,27 @@ async def shift_launch_profile(callback: CallbackQuery, session: AsyncSession) -
     repo = TokenRepository(session)
     token = await repo.get_active_token(user_id)
 
-    if not token or not token.profile_id:
-        await callback.answer("Профиль не найден или profile_id не задан.", show_alert=True)
+    if not token:
+        await callback.answer("Активный токен не найден.", show_alert=True)
         return
 
-    await callback.answer("Запускаем профиль…")
+    await callback.answer("Запускаем браузер…")
 
     try:
-        service = GoLoginService()
-        result = await service.start_profile(token.profile_id)
-        ws_url = result.get("wsUrl", "")
+        ws_url = await BrowserService.launch(
+            token.id,
+            proxy=token.proxy or None,
+            user_agent=token.user_agent or None,
+        )
+        proxy_line = f"\n🔒 Прокси: <code>{token.proxy}</code>" if token.proxy else "\n⚠️ Прокси не задан"
         await callback.message.answer(  # type: ignore[union-attr]
-            f"✅ Профиль <b>{token.name}</b> запущен.\n\n"
+            f"✅ Браузер <b>{token.name}</b> запущен.{proxy_line}\n\n"
             f"WebSocket URL:\n<code>{ws_url}</code>",
             parse_mode="HTML",
         )
-    except httpx.HTTPStatusError as e:
-        logger.error("GoLogin API error: %s", e)
-        await callback.message.answer(  # type: ignore[union-attr]
-            f"❌ Ошибка запуска профиля: {e.response.status_code} {e.response.text}"
-        )
     except Exception as e:
-        logger.error("Unexpected error launching profile: %s", e)
-        await callback.message.answer(f"❌ Неожиданная ошибка: {e}")  # type: ignore[union-attr]
+        logger.error("Browser launch error for token %s: %s", token.id, e)
+        await callback.message.answer(f"❌ Ошибка запуска браузера: {e}")  # type: ignore[union-attr]
 
 
 @router.callback_query(F.data == "shift:release")
@@ -98,9 +163,12 @@ async def shift_release(callback: CallbackQuery, session: AsyncSession) -> None:
     user_id = callback.from_user.id  # type: ignore[union-attr]
 
     repo = TokenRepository(session)
+    token = await repo.get_active_token(user_id)
     released = await repo.release_token(user_id)
 
     if released:
+        if token:
+            await BrowserService.stop(token.id)
         await callback.message.edit_text(  # type: ignore[union-attr]
             "Токен освобождён. Хорошей работы!",
             reply_markup=main_menu_keyboard(),
