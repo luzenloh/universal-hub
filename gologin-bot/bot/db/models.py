@@ -12,7 +12,9 @@ class Token(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(Text, nullable=False)
     value: Mapped[str] = mapped_column(Text, nullable=False)
-    profile_id: Mapped[str | None] = mapped_column(Text, nullable=True)  # GoLogin profile ID
+    profile_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    proxy: Mapped[str | None] = mapped_column(Text, nullable=True)       # http://[user:pass@]host:port or socks5://...
+    user_agent: Mapped[str | None] = mapped_column(Text, nullable=True)  # custom User-Agent string
     is_free: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     assigned_to: Mapped[int | None] = mapped_column(Integer, nullable=True)
     assigned_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
