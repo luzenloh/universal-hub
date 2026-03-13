@@ -142,11 +142,11 @@ async def shift_launch_profile(callback: CallbackQuery, session: AsyncSession) -
         await callback.answer("Активный токен не найден.", show_alert=True)
         return
 
-    # GoLogin cloud launch if profile_id is set and API token is configured
-    if token.profile_id and settings.gologin_api_token:
+    # GoLogin Desktop launch if profile_id is set
+    if token.profile_id:
         await callback.answer("Запускаем GoLogin профиль…")
         try:
-            service = GoLoginService(settings.gologin_api_token)
+            service = GoLoginService()
             result = await service.start_profile(token.profile_id)
             ws_url = result.get("wsUrl") or result.get("debuggerAddress") or str(result)
             await callback.message.answer(  # type: ignore[union-attr]
@@ -162,8 +162,10 @@ async def shift_launch_profile(callback: CallbackQuery, session: AsyncSession) -
             )
         except httpx.HTTPStatusError as e:
             logger.error("GoLogin API error: %s — %s", e.response.status_code, e.response.text)
+            import html
+            safe = html.escape(e.response.text[:300])
             await callback.message.answer(  # type: ignore[union-attr]
-                f"❌ GoLogin ошибка {e.response.status_code}:\n<code>{e.response.text}</code>",
+                f"❌ GoLogin ошибка {e.response.status_code}:\n<code>{safe}</code>",
                 parse_mode="HTML",
             )
         except Exception as e:
