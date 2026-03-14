@@ -56,7 +56,8 @@ async def sync_folders(session_factory: async_sessionmaker) -> None:
 
             for pid in associated:
                 pname = id_to_name.get(pid, "")
-                if "глав" in pname.lower():
+                pname_lower = pname.lower().strip()
+                if pname_lower == "тм" or "глав" in pname_lower:
                     main_profile_id = pid
                 else:
                     numbered.append((pname, pid))
