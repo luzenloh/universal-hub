@@ -56,10 +56,8 @@ async def main() -> None:
     await bot.set_my_commands(
         [
             BotCommand(command="start", description="Главное меню"),
-            BotCommand(command="profiles", description="[Админ] Все профили и их статус"),
-            BotCommand(command="setproxy", description="[Админ] /setproxy М1 http://user:pass@host:port"),
-            BotCommand(command="clearproxy", description="[Админ] /clearproxy М1"),
-            BotCommand(command="setua", description="[Админ] /setua М1 <user-agent>"),
+            BotCommand(command="folders", description="[Админ] Кто за какой папкой"),
+            BotCommand(command="sync", description="[Админ] Синхронизировать папки из GoLogin"),
         ],
         scope=BotCommandScopeAllPrivateChats(),
     )

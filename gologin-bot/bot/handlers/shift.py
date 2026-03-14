@@ -1,4 +1,3 @@
-import html
 import logging
 
 import httpx
@@ -96,20 +95,13 @@ async def shift_folder_info(callback: CallbackQuery, session: AsyncSession) -> N
 
     since = ""
     if folder.assigned_at:
-        since = f"\n🕐 Начало сессии: {folder.assigned_at.strftime('%d.%m.%Y %H:%M')} UTC"
-
-    count_info = ""
-    if folder.selected_count is not None:
-        count_info = f"\n🖥 Запущено профилей: M1…M{folder.selected_count}"
-        if folder.main_profile_id:
-            count_info += " + ТМ глав"
+        since = f"\n🕐 С {folder.assigned_at.strftime('%d.%m %H:%M')} UTC"
 
     is_admin = callback.from_user.username == ADMIN_USERNAME  # type: ignore[union-attr]
 
     await callback.message.edit_text(  # type: ignore[union-attr]
-        f"🔒 Папка <b>{folder.name}</b> занята\n\n"
-        f"👤 Кто занял: {holder_name}"
-        f"{since}{count_info}",
+        f"🔒 <b>{folder.name}</b> занята\n\n"
+        f"👤 {holder_name}{since}",
         parse_mode="HTML",
         reply_markup=folder_info_keyboard(folder_id, is_admin=is_admin),
     )
@@ -193,25 +185,15 @@ async def shift_launch_folder(callback: CallbackQuery, session: AsyncSession) ->
 
     results = await service.start_profiles(all_profile_ids)
 
-    # Build result message
-    lines: list[str] = [f"📁 <b>{folder.name}</b> — запущено {len(all_profile_ids)} профилей\n"]
-    m_counter = 1
-    for pid, res in zip(all_profile_ids, results):
-        if pid == folder.main_profile_id:
-            label = "ТМ глав"
-        else:
-            label = f"M{m_counter}"
-            m_counter += 1
+    errors = [r for r in results if "error" in r]
+    ok_count = len(results) - len(errors)
 
-        if "error" in res:
-            err = html.escape(str(res["error"])[:100])
-            lines.append(f"❌ <b>{label}</b>: {err}")
-        else:
-            ws = res.get("wsUrl") or res.get("debuggerAddress") or "запущен"
-            lines.append(f"✅ <b>{label}</b>: <code>{ws}</code>")
+    text = f"✅ <b>{folder.name}</b>\nЗапущено профилей: {ok_count}/{len(all_profile_ids)}"
+    if errors:
+        text += f"\n⚠️ Ошибок: {len(errors)}"
 
     await callback.message.answer(  # type: ignore[union-attr]
-        "\n".join(lines),
+        text,
         parse_mode="HTML",
         reply_markup=active_folder_keyboard(),
     )

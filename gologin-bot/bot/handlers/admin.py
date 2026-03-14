@@ -7,7 +7,8 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.core.config import ADMIN_USERNAME
-from bot.db.models import Token
+from bot.db.models import Folder, Token
+from bot.db.repository import FolderRepository
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -15,6 +16,58 @@ router = Router()
 
 def _admin_only(message: Message) -> bool:
     return message.from_user is not None and message.from_user.username == ADMIN_USERNAME
+
+
+@router.message(Command("folders"))
+async def cmd_folders(message: Message, session: AsyncSession) -> None:
+    if not _admin_only(message):
+        return
+
+    repo = FolderRepository(session)
+    folders = await repo.get_all_folders()
+
+    if not folders:
+        await message.answer("Папки не найдены.")
+        return
+
+    lines = ["<b>Папки GoLogin:</b>\n"]
+    for f in folders:
+        if f.is_free:
+            lines.append(f"✅ <b>{f.name}</b>")
+        else:
+            holder_name = str(f.assigned_to)
+            if f.assigned_to:
+                try:
+                    chat = await message.bot.get_chat(f.assigned_to)  # type: ignore[union-attr]
+                    parts = []
+                    if chat.first_name:
+                        parts.append(chat.first_name)
+                    if chat.last_name:
+                        parts.append(chat.last_name)
+                    holder_name = " ".join(parts) if parts else holder_name
+                    if chat.username:
+                        holder_name += f" (@{chat.username})"
+                except Exception:
+                    pass
+            lines.append(f"🔒 <b>{f.name}</b>\n  👤 {holder_name}")
+
+    await message.answer("\n\n".join(lines), parse_mode="HTML")
+
+
+@router.message(Command("sync"))
+async def cmd_sync(message: Message) -> None:
+    if not _admin_only(message):
+        return
+
+    await message.answer("⏳ Синхронизация папок GoLogin…")
+    try:
+        from bot.db.base import async_session_factory
+        from bot.services.sync import sync_folders
+        await sync_folders(async_session_factory)
+        await message.answer("✅ Синхронизация завершена.")
+    except Exception as e:
+        logger.error("Sync error: %s", e)
+        await message.answer(f"❌ Ошибка синхронизации: {e}")
 
 
 @router.message(Command("profiles"))
@@ -29,7 +82,7 @@ async def cmd_profiles(message: Message, session: AsyncSession) -> None:
         await message.answer("Профили не найдены.")
         return
 
-    lines = ["<b>Все профили:</b>\n"]
+    lines = ["<b>Все токены:</b>\n"]
     for t in tokens:
         status = "✅ свободен" if t.is_free else "🔒 занят"
         proxy = f"<code>{t.proxy}</code>" if t.proxy else "—"

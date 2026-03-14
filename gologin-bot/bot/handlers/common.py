@@ -20,16 +20,8 @@ async def cmd_start(message: Message, session: AsyncSession) -> None:
     folder = await repo.get_active_folder(user_id)
 
     if folder:
-        count_info = ""
-        if folder.selected_count is not None:
-            has_main = bool(folder.main_profile_id)
-            count_info = f"\n🖥 Запущено: M1…M{folder.selected_count}"
-            if has_main:
-                count_info += " + ТМ глав"
-
         await message.answer(
-            f"У вас активная папка:\n\n"
-            f"<b>{folder.name}</b>{count_info}",
+            f"Вы работаете с папкой:\n\n<b>{folder.name}</b>",
             parse_mode="HTML",
             reply_markup=active_folder_keyboard(),
         )
