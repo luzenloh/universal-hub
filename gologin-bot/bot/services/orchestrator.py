@@ -1,6 +1,6 @@
 """
 Orchestrator — manages N WindowAgents for one active session.
-Stored as a singleton on FastAPI app.state.
+Global singleton shared between the Telegram bot and the FastAPI web panel.
 """
 from __future__ import annotations
 
@@ -16,6 +16,21 @@ from bot.services.ws_manager import WebSocketManager
 from web.models.schemas import CommandRequest, CommandResult, WindowState, WindowStatus
 
 logger = logging.getLogger(__name__)
+
+# Global singleton — initialized once in main.py, shared with bot handlers and web routes
+_orchestrator: "Orchestrator | None" = None
+
+
+def get_orchestrator() -> "Orchestrator":
+    if _orchestrator is None:
+        raise RuntimeError("Orchestrator not initialized. Call init_orchestrator() first.")
+    return _orchestrator
+
+
+def init_orchestrator(session_factory: async_sessionmaker[AsyncSession], ws_manager: WebSocketManager) -> "Orchestrator":
+    global _orchestrator
+    _orchestrator = Orchestrator(session_factory=session_factory, ws_manager=ws_manager)
+    return _orchestrator
 
 
 class Orchestrator:
@@ -35,9 +50,10 @@ class Orchestrator:
     async def start_session(self, token_hash: str, profile_count: int) -> list[WindowState]:
         """
         Look up folder by gologin_id, start profiles, create agents.
+        Used by the web panel directly.
         token_hash = GoLogin folder UUID (Folder.gologin_id).
         """
-        await self.stop_session()  # stop any existing session
+        await self.stop_agents()  # stop agents (but don't stop profiles — web panel didn't start them)
 
         async with self._session_factory() as session:
             result = await session.execute(
@@ -63,7 +79,6 @@ class Orchestrator:
             ws_url = res.get("wsUrl") if isinstance(res, dict) else None
             if not ws_url:
                 logger.warning("No wsUrl for profile %s: %s", pid, res)
-                # Create a placeholder agent in ERROR state
                 agent = WindowAgent(pid, label, "", on_state_change=self._on_state_change)
                 agent._status = WindowStatus.ERROR
                 agent._error_msg = f"Failed to start: {res.get('error', 'no wsUrl')}"
@@ -76,18 +91,55 @@ class Orchestrator:
 
         return states
 
-    async def stop_session(self) -> None:
-        """Stop all agents and GoLogin profiles."""
+    async def attach_profiles(self, entries: list[tuple[str, str, str]]) -> list[WindowState]:
+        """
+        Called by the Telegram bot after it already started profiles.
+        entries: list of (profile_id, label, ws_url)
+        Creates WindowAgents for already-running profiles — no GoLogin calls.
+        """
+        await self.stop_agents()
+
+        self._active_profile_ids = [pid for pid, _, _ in entries]
+        states: list[WindowState] = []
+
+        for pid, label, ws_url in entries:
+            if not ws_url:
+                agent = WindowAgent(pid, label, "", on_state_change=self._on_state_change)
+                agent._status = WindowStatus.ERROR
+                agent._error_msg = "No wsUrl"
+            else:
+                agent = WindowAgent(pid, label, ws_url, on_state_change=self._on_state_change)
+                agent.start()
+
+            self._agents[pid] = agent
+            states.append(agent.get_state())
+
+        # Broadcast snapshot to any open web clients
+        await self._ws.broadcast({
+            "event": "state_snapshot",
+            "windows": [s.model_dump() for s in states],
+        })
+
+        logger.info("Attached %d profiles from bot", len(entries))
+        return states
+
+    async def stop_agents(self) -> None:
+        """Stop all window agents WITHOUT stopping GoLogin profiles."""
         if not self._agents:
             return
-
         for agent in list(self._agents.values()):
             await agent.stop()
-
-        await self._gologin.stop_profiles(self._active_profile_ids)
         self._agents.clear()
         self._active_profile_ids = []
-        logger.info("Session stopped")
+        logger.info("Agents stopped")
+
+    async def stop_session(self) -> None:
+        """Stop agents AND GoLogin profiles. Used by web panel Stop button."""
+        profile_ids = list(self._active_profile_ids)
+        await self.stop_agents()
+        if profile_ids:
+            await self._gologin.stop_profiles(profile_ids)
+            logger.info("Session stopped (profiles killed)")
 
     # ------------------------------------------------------------------ state
 
@@ -108,7 +160,6 @@ class Orchestrator:
     # ------------------------------------------------------------------ internal
 
     async def _on_state_change(self, state: WindowState) -> None:
-        """Broadcast a single window state update to all WS clients."""
         await self._ws.broadcast({
             "event": "window_update",
             "window": state.model_dump(),

@@ -226,3 +226,23 @@ async def toggle_setting(page: Page, setting: str, enabled: bool) -> None:
     if is_checked != enabled:
         await checkbox.click()
         await asyncio.sleep(_UI_SETTLE)
+
+
+async def open_url_in_browser(ws_url: str, url: str) -> None:
+    """Open a new tab at *url* inside an already-running GoLogin browser (CDP attach)."""
+    from playwright.async_api import async_playwright
+
+    try:
+        pw = await async_playwright().start()
+        try:
+            browser = await pw.chromium.connect_over_cdp(ws_url)
+            ctxs = browser.contexts
+            ctx = ctxs[0] if ctxs else await browser.new_context()
+            page = await ctx.new_page()
+            await page.goto(url, wait_until="domcontentloaded", timeout=15_000)
+            logger.info("Opened %s in browser via CDP", url)
+        finally:
+            # pw.stop() disconnects playwright without closing the browser process
+            await pw.stop()
+    except Exception as exc:
+        logger.warning("Failed to open %s in browser: %s", url, exc)

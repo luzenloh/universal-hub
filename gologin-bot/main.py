@@ -11,7 +11,9 @@ from bot.core.config import settings
 from bot.db.base import async_session_factory, init_db
 from bot.handlers import admin, common, shift
 from bot.middlewares.db import DbSessionMiddleware
+from bot.services.orchestrator import init_orchestrator
 from bot.services.sync import sync_folders
+from bot.services.ws_manager import WebSocketManager
 from web.app import create_app
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -22,8 +24,9 @@ async def main() -> None:
     await init_db()
     logger.info("Database initialized")
 
-    await sync_folders(async_session_factory)
-    logger.info("Folders synced from GoLogin")
+    # Create shared ws_manager and orchestrator singleton (used by both bot and web panel)
+    ws_manager = WebSocketManager()
+    init_orchestrator(async_session_factory, ws_manager)
 
     bot = Bot(token=settings.bot_token)
     dp = Dispatcher()
@@ -61,12 +64,18 @@ async def main() -> None:
     dp.include_router(common.router)
     dp.include_router(shift.router)
 
-    # Run aiogram polling as a background task (shares the event loop)
-    logger.info("Starting Telegram bot polling as background task...")
     asyncio.create_task(dp.start_polling(bot))
 
-    # FastAPI + uvicorn as the main loop keeper
-    fastapi_app = create_app()
+    async def _sync_bg() -> None:
+        try:
+            await sync_folders(async_session_factory)
+            logger.info("Folders synced from GoLogin")
+        except Exception as exc:
+            logger.warning("Background folder sync failed: %s", exc)
+
+    asyncio.create_task(_sync_bg())
+
+    fastapi_app = create_app(ws_manager)
     config = uvicorn.Config(
         fastapi_app,
         host=settings.web_host,

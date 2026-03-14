@@ -7,7 +7,7 @@ from aiogram import Bot, F, Router
 from aiogram.types import CallbackQuery
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.core.config import ADMIN_USERNAME
+from bot.core.config import ADMIN_USERNAME, settings
 from bot.db.repository import FolderRepository
 from bot.keyboards.builder import (
     active_folder_keyboard,
@@ -17,6 +17,7 @@ from bot.keyboards.builder import (
     main_menu_keyboard,
 )
 from bot.services.gologin import GoLoginService
+from bot.services.orchestrator import get_orchestrator
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -203,8 +204,10 @@ async def shift_launch_folder(callback: CallbackQuery, session: AsyncSession) ->
     )
 
     service = GoLoginService()
+    tm_ws_url: str | None = None
     try:
-        await service.start_profile(folder.main_profile_id)
+        tm_result = await service.start_profile(folder.main_profile_id)
+        tm_ws_url = tm_result.get("wsUrl") if isinstance(tm_result, dict) else None
     except httpx.ConnectError:
         await callback.message.edit_text(  # type: ignore[union-attr]
             "❌ GoLogin Desktop не отвечает.\nУбедись что приложение открыто.",
@@ -228,14 +231,16 @@ async def shift_launch_folder(callback: CallbackQuery, session: AsyncSession) ->
         return
 
     ws_entries: list[tuple[str, str]] = []
+    orchestrator_entries: list[tuple[str, str, str]] = []
     errors: list = []
     if numbered:
         results = await service.start_profiles(numbered)
         errors = [r for r in results if "error" in r]
-        for i, r in enumerate(results, start=1):
+        for i, (pid, r) in enumerate(zip(numbered, results), start=1):
             ws_url = r.get("wsUrl") if isinstance(r, dict) else None
             if ws_url and "error" not in r:
                 ws_entries.append((f"M{i}", ws_url))
+                orchestrator_entries.append((pid, f"M{i}", ws_url))
 
     text = f"✅ <b>{folder.name}</b>\nТМ + M1…M{count} запущены."
     if errors:
@@ -246,6 +251,14 @@ async def shift_launch_folder(callback: CallbackQuery, session: AsyncSession) ->
         parse_mode="HTML",
         reply_markup=active_folder_keyboard(),
     )
+
+    if orchestrator_entries:
+        asyncio.create_task(get_orchestrator().attach_profiles(orchestrator_entries))
+
+    if tm_ws_url:
+        from bot.services.massmo_actions import open_url_in_browser
+        dashboard_url = f"http://{settings.web_host}:{settings.web_port}"
+        asyncio.create_task(open_url_in_browser(tm_ws_url, dashboard_url))
 
     if ws_entries:
         bot: Bot = callback.bot  # type: ignore[assignment]
@@ -276,6 +289,8 @@ async def shift_release(callback: CallbackQuery, session: AsyncSession) -> None:
     if all_ids:
         service = GoLoginService()
         await service.stop_profiles(all_ids)
+
+    asyncio.create_task(get_orchestrator().stop_agents())
 
     await callback.message.edit_text(  # type: ignore[union-attr]
         "Смена завершена. Хорошей работы!",
