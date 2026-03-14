@@ -25,34 +25,43 @@ async def sync_folders(session_factory: async_sessionmaker) -> None:
 
     logger.info("Fetched %d folders from GoLogin", len(folders))
 
+    # Collect all profile IDs across all folders
+    all_profile_ids: list[str] = []
+    for folder_data in folders:
+        all_profile_ids.extend(folder_data.get("associatedProfiles", []))
+
+    # Fetch all profile names concurrently (one request per profile)
+    try:
+        id_to_name = await cloud.get_profiles_by_ids(all_profile_ids)
+    except Exception as e:
+        logger.error("Failed to fetch profile names: %s", e)
+        id_to_name = {}
+
+    logger.info("Fetched names for %d profiles", len(id_to_name))
+
     async with session_factory() as session:
         repo = FolderRepository(session)
 
         for folder_data in folders:
             folder_id = folder_data.get("id") or folder_data.get("_id")
             folder_name = folder_data.get("name", "Без названия")
+            associated: list[str] = folder_data.get("associatedProfiles", [])
+
             if not folder_id:
                 continue
 
-            try:
-                profiles = await cloud.get_profiles_in_folder(folder_id)
-            except Exception as e:
-                logger.error("Failed to fetch profiles for folder %s: %s", folder_name, e)
-                profiles = []
-
-            # Separate main (ТМ глав) from numbered (M1..M15)
+            # Separate ТМ ГЛАВ from numbered profiles
             main_profile_id: str | None = None
-            numbered: list[str] = []
+            numbered: list[tuple[str, str]] = []  # (name, id)
 
-            for p in profiles:
-                pid = p.get("id") or p.get("_id", "")
-                pname: str = p.get("name", "")
+            for pid in associated:
+                pname = id_to_name.get(pid, "")
                 if "глав" in pname.lower():
                     main_profile_id = pid
                 else:
                     numbered.append((pname, pid))
 
-            # Sort numbered profiles by name so M1 < M2 < ... < M15
+            # Sort M1 < M2 < ... < M15 by name
             numbered.sort(key=lambda x: x[0])
             numbered_ids = [pid for _, pid in numbered]
 
@@ -65,6 +74,6 @@ async def sync_folders(session_factory: async_sessionmaker) -> None:
             logger.info(
                 "Synced folder '%s': main=%s, numbered=%d",
                 folder_name,
-                main_profile_id,
+                "yes" if main_profile_id else "None",
                 len(numbered_ids),
             )
