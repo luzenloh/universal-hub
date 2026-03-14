@@ -10,11 +10,8 @@ def main_menu_keyboard() -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def active_folder_keyboard(folder_id: int | None = None, count: int | None = None) -> InlineKeyboardMarkup:
+def active_folder_keyboard() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
-    if folder_id is not None and count is not None:
-        label = f"Открыть M1…M{count}"
-        builder.button(text=f"🖥 {label}", callback_data=f"shift:launch_rest:{folder_id}:{count}")
     builder.button(text="Завершить смену", callback_data="shift:release")
     builder.adjust(1)
     return builder.as_markup()

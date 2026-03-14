@@ -1,7 +1,9 @@
+import asyncio
+import html
 import logging
 
 import httpx
-from aiogram import F, Router
+from aiogram import Bot, F, Router
 from aiogram.types import CallbackQuery
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -192,7 +194,9 @@ async def shift_launch_folder(callback: CallbackQuery, session: AsyncSession) ->
         )
         return
 
-    await callback.answer("Запускаем ТМ…")
+    numbered = folder.numbered_ids[:count]
+
+    await callback.answer("Запускаем…")
     await callback.message.edit_text(  # type: ignore[union-attr]
         f"⏳ Запускаем <b>{folder.name}</b>…",
         parse_mode="HTML",
@@ -201,62 +205,37 @@ async def shift_launch_folder(callback: CallbackQuery, session: AsyncSession) ->
     service = GoLoginService()
     try:
         await service.start_profile(folder.main_profile_id)
-        await callback.message.edit_text(  # type: ignore[union-attr]
-            f"✅ <b>{folder.name}</b>\nТМ запущен.",
-            parse_mode="HTML",
-            reply_markup=active_folder_keyboard(folder_id=folder.id, count=count),
-        )
     except httpx.ConnectError:
         await callback.message.edit_text(  # type: ignore[union-attr]
             "❌ GoLogin Desktop не отвечает.\nУбедись что приложение открыто.",
             reply_markup=active_folder_keyboard(),
         )
+        return
     except httpx.HTTPStatusError as e:
-        import html
         safe = html.escape(e.response.text[:200])
         await callback.message.edit_text(  # type: ignore[union-attr]
             f"❌ Ошибка GoLogin {e.response.status_code}:\n<code>{safe}</code>",
             parse_mode="HTML",
             reply_markup=active_folder_keyboard(),
         )
+        return
     except Exception as e:
         logger.error("Launch error: %s", e)
         await callback.message.edit_text(  # type: ignore[union-attr]
             f"❌ Ошибка: {e}",
             reply_markup=active_folder_keyboard(),
         )
-
-
-# ── Launch rest (M1…MN) ────────────────────────────────────────────────────────
-
-@router.callback_query(F.data.startswith("shift:launch_rest:"))
-async def shift_launch_rest(callback: CallbackQuery, session: AsyncSession) -> None:
-    parts = callback.data.split(":")  # type: ignore[union-attr]
-    folder_id = int(parts[2])
-    count = int(parts[3])
-
-    repo = FolderRepository(session)
-    folder = await repo.get_folder_by_id(folder_id)
-
-    if not folder or folder.assigned_to != callback.from_user.id:  # type: ignore[union-attr]
-        await callback.answer("Сессия не найдена.", show_alert=True)
         return
 
-    numbered = folder.numbered_ids[:count]
-    if not numbered:
-        await callback.answer("Нет профилей для запуска.", show_alert=True)
-        return
-
-    await callback.answer("Запускаем M-профили…")
-    await callback.message.edit_text(  # type: ignore[union-attr]
-        f"⏳ Открываем M1…M{count}…",
-        parse_mode="HTML",
-    )
-
-    service = GoLoginService()
-    results = await service.start_profiles(numbered)
-    errors = [r for r in results if "error" in r]
-    ok = len(results) - len(errors)
+    ws_entries: list[tuple[str, str]] = []
+    errors: list = []
+    if numbered:
+        results = await service.start_profiles(numbered)
+        errors = [r for r in results if "error" in r]
+        for i, r in enumerate(results, start=1):
+            ws_url = r.get("wsUrl") if isinstance(r, dict) else None
+            if ws_url and "error" not in r:
+                ws_entries.append((f"M{i}", ws_url))
 
     text = f"✅ <b>{folder.name}</b>\nТМ + M1…M{count} запущены."
     if errors:
@@ -267,6 +246,11 @@ async def shift_launch_rest(callback: CallbackQuery, session: AsyncSession) -> N
         parse_mode="HTML",
         reply_markup=active_folder_keyboard(),
     )
+
+    if ws_entries:
+        bot: Bot = callback.bot  # type: ignore[assignment]
+        chat_id = callback.message.chat.id  # type: ignore[union-attr]
+        asyncio.create_task(_send_massmo_report(bot, chat_id, ws_entries))
 
 
 # ── Release ────────────────────────────────────────────────────────────────────
@@ -298,3 +282,17 @@ async def shift_release(callback: CallbackQuery, session: AsyncSession) -> None:
         reply_markup=main_menu_keyboard(),
     )
     await callback.answer()
+
+
+# ── Background: scrape MassMO and report ──────────────────────────────────────
+
+async def _send_massmo_report(bot: Bot, chat_id: int, ws_entries: list[tuple[str, str]]) -> None:
+    from bot.services.massmo import format_results, scrape_profiles
+
+    try:
+        results = await scrape_profiles(ws_entries)
+        text = format_results(results)
+        await bot.send_message(chat_id, text, parse_mode="HTML")
+    except Exception as e:
+        logger.error("MassMO report error: %s", e)
+        await bot.send_message(chat_id, f"⚠️ Не удалось собрать данные с MassMO: {e}")
