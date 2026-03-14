@@ -3,6 +3,7 @@ import html
 import logging
 import traceback
 
+import uvicorn
 from aiogram import Bot, Dispatcher
 from aiogram.types import BotCommand, BotCommandScopeAllPrivateChats, ErrorEvent
 
@@ -11,6 +12,7 @@ from bot.db.base import async_session_factory, init_db
 from bot.handlers import admin, common, shift
 from bot.middlewares.db import DbSessionMiddleware
 from bot.services.sync import sync_folders
+from web.app import create_app
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -59,8 +61,21 @@ async def main() -> None:
     dp.include_router(common.router)
     dp.include_router(shift.router)
 
-    logger.info("Starting bot polling...")
-    await dp.start_polling(bot)
+    # Run aiogram polling as a background task (shares the event loop)
+    logger.info("Starting Telegram bot polling as background task...")
+    asyncio.create_task(dp.start_polling(bot))
+
+    # FastAPI + uvicorn as the main loop keeper
+    fastapi_app = create_app()
+    config = uvicorn.Config(
+        fastapi_app,
+        host=settings.web_host,
+        port=settings.web_port,
+        log_level="info",
+    )
+    server = uvicorn.Server(config)
+    logger.info("Starting web panel on http://%s:%d", settings.web_host, settings.web_port)
+    await server.serve()
 
 
 if __name__ == "__main__":
