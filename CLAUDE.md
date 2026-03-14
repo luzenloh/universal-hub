@@ -1,75 +1,120 @@
-# CLAUDE.md — AI Portfolio Projects
+# CLAUDE.md — AI Backend Portfolio
 
 Инструкции для Claude Code при работе с этим репозиторием.
 
 ## Цель репозитория
 
-5 рабочих AI-проектов для портфолио Junior AI Developer / Vibe Coder.
-Каждый проект деплоится, имеет demo-ссылку и README со скриншотом.
+5 production-style AI backend проектов для портфолио AI / Backend Developer.
+
+Каждый проект демонстрирует:
+- backend архитектуру (не demo-style, а как реальный сервис)
+- интеграцию с LLM через абстракции
+- работу с векторными БД и RAG
+- data processing pipelines
+- agent orchestration
+- PostgreSQL + Docker Compose деплой
 
 ---
 
-## Структура проектов
+## Структура репозитория
 
 ```
 cCODES/
-├── docchat/      # RAG-чатбот по PDF/TXT (Streamlit + LangChain + FAISS)
-├── agentflow/    # AI-агент с tool calling (Claude API + Streamlit)
-├── datalens/     # NL → data analysis + charts (Pandas + Plotly + Streamlit)
-├── telegramai/   # Telegram бот с памятью (python-telegram-bot + SQLite)
-└── autobrief/    # FastAPI сервис AI-автоматизации (FastAPI + HTMX)
+├── rag-service/          # Production RAG backend (FastAPI + PostgreSQL + pgvector)
+├── agent-orchestrator/   # Multi-agent LLM система (planner / executor / critic)
+├── data-ai-engine/       # NL → data analysis engine (Pandas + sandbox + LLM)
+├── llm-evaluator/        # LLM-as-a-judge evaluation system
+└── ai-automation/        # AI workflow automation backend (job queue + task pipelines)
 ```
 
-Каждый проект содержит:
-- `app.py` / `main.py` / `bot.py` — точка входа
-- `prompts.py` — все промпты вынесены отдельно (демонстрирует prompt engineering)
-- `requirements.txt` — зависимости
-- `Dockerfile` — для деплоя
-- `README.md` — с архитектурой, скриншотом, инструкцией
+---
+
+## Структура каждого проекта
+
+```
+project/
+├── app/
+│   ├── api/
+│   │   └── routes.py
+│   ├── services/          # бизнес-логика
+│   ├── repositories/      # работа с БД
+│   ├── models/
+│   │   ├── schemas.py     # Pydantic
+│   │   └── db_models.py   # SQLAlchemy
+│   ├── core/
+│   │   ├── config.py
+│   │   └── dependencies.py
+│   └── llm/
+│       ├── client.py
+│       └── prompts.py     # все промпты здесь
+├── main.py
+├── requirements.txt
+├── Dockerfile
+├── docker-compose.yml
+├── .env.example
+└── README.md
+```
+
+Роуты содержат только HTTP-логику. Бизнес-логика — в сервисах. Работа с БД — в репозиториях.
 
 ---
 
 ## Стек
 
-- **LLM**: Claude API (`claude-opus-4-6`) как основная модель
-- **UI**: Streamlit (быстрые прототипы), FastAPI + HTMX (AutoBrief)
-- **RAG**: LangChain + FAISS + OpenAI Embeddings
-- **Data**: Pandas + Plotly
-- **Telegram**: python-telegram-bot (async)
-- **DB**: SQLite (TelegramAI)
-- **Deploy**: Hugging Face Spaces, Railway, Render
+### Backend
+- Python 3.11+
+- FastAPI + Pydantic
+- SQLAlchemy (async)
+
+### Database
+- PostgreSQL (основная БД)
+- pgvector / FAISS (vector store)
+
+### AI / ML
+- Claude API (`claude-opus-4-6`) — основная LLM
+- SentenceTransformers — embeddings
+- LangChain — только там, где реально упрощает (RAG pipeline)
+- Pandas + NumPy — data processing
+
+### Infra
+- Docker + Docker Compose
+- async FastAPI
 
 ---
 
-## Правила работы
+## Правила кода
 
-### Код
-- Простой, читаемый код — работодатель должен понять за 30 секунд
-- Не усложнять: если задача решается 10 строками — не делать 50
-- Каждый проект независим (свой `requirements.txt`, свой `.env`)
-- Секреты только через переменные окружения (`.env` файл, никогда не в коде)
-- Использовать `python-dotenv` для загрузки `.env`
-- Всегда создавать `.env.example` рядом с `.env`
+### Архитектура
+- Модульная структура — никаких монолитных `app.py` с бизнес-логикой внутри роутов
+- Dependency injection через FastAPI `Depends`
+- Сервисный слой изолирован от транспортного
+- Репозитории изолируют работу с БД
+
+### Качество
+- Type hints везде — функции, переменные, возвращаемые значения
+- Логирование через `logging` (не `print`)
+- Обработка ошибок: явные исключения с понятными сообщениями
+- Каждый проект независим: свой `requirements.txt`, свой `.env`
 
 ### Промпты
-- Все промпты хранятся в `prompts.py` каждого проекта
+- Все промпты в `app/llm/prompts.py`
 - Промпты документируются комментариями — показывает понимание prompt engineering
+- LLM вызывается только через `app/llm/client.py`, не напрямую из роутов/сервисов
 
 ### Безопасность
-- Никаких `eval()` без sandbox (исключение: DataLens с ограниченным `exec`)
-- Валидация пользовательского ввода на входе в API
-- API-ключи только из `os.getenv()`
+- Секреты только через `os.getenv()` / `pydantic-settings`
+- Никакого `eval()` без sandbox
+- Валидация входных данных через Pydantic схемы на входе в API
+- Никогда не коммитить `.env`
 
 ---
 
 ## Git-конвенции
 
-### Формат коммитов (Conventional Commits)
+### Формат (Conventional Commits)
 
 ```
 <type>(<scope>): <description>
-
-[optional body]
 ```
 
 **Типы:**
@@ -77,52 +122,57 @@ cCODES/
 - `fix` — исправление бага
 - `docs` — README, комментарии
 - `refactor` — рефакторинг без изменения поведения
-- `chore` — настройка окружения, зависимости, Dockerfile
+- `chore` — зависимости, Dockerfile, конфиги
 
-**Scope** — имя проекта: `docchat`, `agentflow`, `datalens`, `telegramai`, `autobrief`, `root`
+**Scope** — имя проекта: `rag-service`, `agent-orchestrator`, `data-ai-engine`, `llm-evaluator`, `ai-automation`, `root`
 
 **Примеры:**
 ```
-feat(docchat): add FAISS vector index and RAG pipeline
-feat(docchat): add Streamlit chat UI with file upload
-feat(agentflow): implement tool calling agent loop
-fix(datalens): fix sandbox exec for plotly charts
-docs(telegramai): add README with architecture diagram
+feat(rag-service): implement async document ingestion pipeline
+feat(rag-service): add pgvector retrieval with metadata filtering
+feat(agent-orchestrator): implement planner agent and tool registry
+feat(data-ai-engine): add sandboxed pandas execution engine
+feat(llm-evaluator): implement LLM-as-a-judge scoring pipeline
+fix(rag-service): fix embedding batch size causing OOM
 chore(root): add .gitignore and CLAUDE.md
 ```
 
 ### Стратегия коммитов
-- Коммит после каждого рабочего шага (не "сохраняй всё в конце")
-- Каждый коммит должен оставлять проект в **рабочем состоянии**
-- Один коммит = одна логическая единица изменений
-- Перед коммитом проверить: нет ли в стейдже `.env` или `__pycache__`
+- Коммит после каждого рабочего шага
+- Каждый коммит оставляет проект в **запускаемом состоянии**
+- Один коммит = одна логическая единица (один сервис, один эндпоинт, один pipeline)
+- Перед коммитом: нет `.env`, нет `__pycache__`, нет секретов в коде
 
 ### Тестирование перед коммитом
-- **Никогда не коммитить непроверенный код**
-- Порядок: написали код → установили зависимости → запустили → проверили руками → коммит
-- Для Telegram-ботов: запустить локально, пройтись по всем командам вручную
-- Для Streamlit/FastAPI приложений: запустить локально, проверить основные сценарии
-- Если что-то не работает — сначала чиним, потом коммитим
+- **Не коммитить непроверенный код**
+- Порядок: написали → `docker-compose up` → проверили endpoint → коммит
+- Если что-то не работает — сначала чиним
 
 ---
 
 ## Деплой
 
-| Проект | Платформа | Конфиг |
-|--------|-----------|--------|
-| DocChat | Hugging Face Spaces | `README.md` с `sdk: streamlit` |
-| AgentFlow | Railway | `Dockerfile` |
-| DataLens | Hugging Face Spaces | `README.md` с `sdk: streamlit` |
-| TelegramAI | Railway | `railway.json` + `Dockerfile` |
-| AutoBrief | Render | `render.yaml` |
+Каждый проект запускается через:
+
+```bash
+docker-compose up
+```
+
+`docker-compose.yml` содержит минимум: backend + postgres + (vector db если нужен).
 
 ---
 
 ## Переменные окружения
 
-Все проекты ожидают в `.env`:
+`.env.example` обязателен в каждом проекте:
+
 ```
-ANTHROPIC_API_KEY=sk-ant-...
-OPENAI_API_KEY=sk-...        # только DocChat (embeddings)
-TELEGRAM_BOT_TOKEN=...       # только TelegramAI
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+POSTGRES_DB=
+POSTGRES_USER=
+POSTGRES_PASSWORD=
+
+ANTHROPIC_API_KEY=
+OPENAI_API_KEY=        # только там, где нужны OpenAI embeddings
 ```
