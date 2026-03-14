@@ -32,16 +32,17 @@ def folder_list_keyboard(folders: list[Folder]) -> InlineKeyboardMarkup:
 
 
 def count_picker_keyboard(folder_id: int, n: int, max_n: int) -> InlineKeyboardMarkup:
-    """<< < N > >> style picker + launch button."""
+    """<< < N > >> style picker + separate launch button."""
     builder = InlineKeyboardBuilder()
 
     builder.button(text="«", callback_data=f"shift:count:{folder_id}:1")
     builder.button(text="‹", callback_data=f"shift:count:{folder_id}:{max(1, n - 1)}")
-    builder.button(text=str(n), callback_data=f"shift:launch_folder:{folder_id}:{n}")
+    builder.button(text=str(n), callback_data="shift:noop")  # display only
     builder.button(text="›", callback_data=f"shift:count:{folder_id}:{min(max_n, n + 1)}")
     builder.button(text="»", callback_data=f"shift:count:{folder_id}:{max_n}")
+    builder.button(text="🚀 Запустить", callback_data=f"shift:launch_folder:{folder_id}:{n}")
     builder.button(text="← Назад", callback_data="shift:folders")
-    builder.adjust(5, 1)
+    builder.adjust(5, 1, 1)
     return builder.as_markup()
 
 

@@ -20,6 +20,13 @@ logger = logging.getLogger(__name__)
 router = Router()
 
 
+# ── No-op (display-only buttons) ──────────────────────────────────────────────
+
+@router.callback_query(F.data == "shift:noop")
+async def shift_noop(callback: CallbackQuery) -> None:
+    await callback.answer()
+
+
 # ── Token list ─────────────────────────────────────────────────────────────────
 
 @router.callback_query(F.data == "shift:folders")
