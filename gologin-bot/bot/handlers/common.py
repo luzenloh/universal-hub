@@ -14,14 +14,19 @@ router = Router()
 
 @router.message(CommandStart())
 async def cmd_start(message: Message, session: AsyncSession) -> None:
-    user_id = message.from_user.id  # type: ignore[union-attr]
+    # Delete the /start command message to keep chat clean
+    try:
+        await message.delete()
+    except Exception:
+        pass
 
+    user_id = message.from_user.id  # type: ignore[union-attr]
     repo = FolderRepository(session)
     folder = await repo.get_active_folder(user_id)
 
     if folder:
         await message.answer(
-            f"Вы работаете с папкой:\n\n<b>{folder.name}</b>",
+            f"Вы работаете с токеном:\n\n<b>{folder.name}</b>",
             parse_mode="HTML",
             reply_markup=active_folder_keyboard(),
         )
