@@ -1,11 +1,12 @@
 import asyncio
+import html
 import logging
 import traceback
 
 from aiogram import Bot, Dispatcher
 from aiogram.types import BotCommand, BotCommandScopeAllPrivateChats, ErrorEvent
 
-from bot.core.config import ADMIN_USERNAME, settings
+from bot.core.config import settings
 from bot.db.base import async_session_factory, init_db
 from bot.handlers import admin, common, shift
 from bot.middlewares.db import DbSessionMiddleware
@@ -30,15 +31,6 @@ async def main() -> None:
         tb = "".join(traceback.format_exception(type(event.exception), event.exception, event.exception.__traceback__))
         logger.error("Unhandled exception:\n%s", tb)
         try:
-            # Find admin and notify
-            async for tg_user in bot.get_chat_administrators(  # only works in groups
-                chat_id=event.update.message.chat.id if event.update.message else 0
-            ):
-                pass
-        except Exception:
-            pass
-        # Best-effort: reply to the user with a generic error
-        try:
             update = event.update
             chat_id = None
             if update.message:
@@ -47,7 +39,6 @@ async def main() -> None:
                 chat_id = update.callback_query.message.chat.id
                 await update.callback_query.answer("⚠️ Внутренняя ошибка. Смотри логи.", show_alert=True)
             if chat_id:
-                import html
                 short = html.escape(str(event.exception)[:200])
                 await bot.send_message(chat_id, f"⚠️ <b>Ошибка:</b> <code>{short}</code>", parse_mode="HTML")
         except Exception:

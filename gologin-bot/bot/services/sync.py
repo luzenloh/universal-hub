@@ -1,4 +1,5 @@
 import logging
+import re
 
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
@@ -63,7 +64,6 @@ async def sync_folders(session_factory: async_sessionmaker) -> None:
                     numbered.append((pname, pid))
 
             # Sort M1 < M2 < ... < M15 numerically (string sort would put M10 before M2)
-            import re
             def _num_key(item: tuple[str, str]) -> int:
                 m = re.search(r"\d+", item[0])
                 return int(m.group()) if m else 0
