@@ -28,15 +28,43 @@ class GoLoginService:
             response.raise_for_status()
 
     async def start_profiles(self, profile_ids: list[str]) -> list[dict]:
-        """Start multiple profiles concurrently. Returns list of results (or error dicts)."""
-        async def _start(pid: str) -> dict:
-            try:
-                return await self.start_profile(pid)
-            except Exception as e:
-                logger.error("Failed to start profile %s: %s", pid, e)
-                return {"error": str(e), "profileId": pid}
+        """Start multiple profiles concurrently. Returns list of results (or error dicts).
+        If a profile returns empty wsUrl (already running), stops and restarts it to get a fresh wsUrl.
+        """
+        sem = asyncio.Semaphore(5)  # limit concurrent GoLogin Desktop calls
 
-        return await asyncio.gather(*[_start(pid) for pid in profile_ids])
+        async def _start(pid: str) -> dict:
+            async with sem:
+                try:
+                    return await self.start_profile(pid)
+                except Exception as e:
+                    logger.error("Failed to start profile %s: %s", pid, e)
+                    return {"error": str(e), "profileId": pid}
+
+        results: list[dict] = list(await asyncio.gather(*[_start(pid) for pid in profile_ids]))
+
+        # Profiles already running return empty wsUrl — stop and restart them
+        stale = [
+            pid for pid, r in zip(profile_ids, results)
+            if isinstance(r, dict) and r.get("status") == "success" and not r.get("wsUrl")
+        ]
+        if stale:
+            logger.info("Restarting %d already-running profiles to get fresh wsUrl: %s", len(stale), stale)
+            await self.stop_profiles(stale)
+            await asyncio.sleep(5)  # wait for GoLogin Desktop to fully close browsers
+            retry: list[dict] = list(await asyncio.gather(*[_start(pid) for pid in stale]))
+            # Second attempt for any that still fail
+            still_bad = [pid for pid, r in zip(stale, retry) if "error" in r or not r.get("wsUrl")]
+            if still_bad:
+                logger.warning("Second restart attempt for %d profiles: %s", len(still_bad), still_bad)
+                await asyncio.sleep(3)
+                retry2: list[dict] = list(await asyncio.gather(*[_start(pid) for pid in still_bad]))
+                retry_map2 = dict(zip(still_bad, retry2))
+                retry = [retry_map2.get(pid, r) for pid, r in zip(stale, retry)]
+            retry_map = dict(zip(stale, retry))
+            results = [retry_map.get(pid, r) for pid, r in zip(profile_ids, results)]
+
+        return results
 
     async def stop_profiles(self, profile_ids: list[str]) -> None:
         """Stop multiple profiles concurrently, ignoring errors."""

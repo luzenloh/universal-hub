@@ -11,6 +11,7 @@ class WindowStatus(str, Enum):
     IDLE = "IDLE"
     SEARCHING = "SEARCHING"
     ACTIVE_PAYOUT = "ACTIVE_PAYOUT"
+    DISABLED = "DISABLED"
     ERROR = "ERROR"
     STOPPED = "STOPPED"
 
@@ -30,6 +31,8 @@ class WindowState(BaseModel):
     payout: PayoutData | None = None
     error_msg: str | None = None
     last_updated: float
+    min_limit: int | None = None
+    max_limit: int | None = None
 
 
 class CommandType(str, Enum):

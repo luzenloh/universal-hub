@@ -45,6 +45,7 @@
   .badge.IDLE       { background: #064e3b; color: #34d399; }
   .badge.SEARCHING  { background: #1e3a5f; color: #60a5fa; }
   .badge.ACTIVE_PAYOUT { background: #451a03; color: #fb923c; }
+  .badge.DISABLED   { background: #2d1b69; color: #a78bfa; }
   .badge.ERROR      { background: #450a0a; color: #f87171; }
   .badge.STOPPED    { background: #1f2937; color: #6b7280; }
 
@@ -218,10 +219,12 @@ function buildCard(w) {
     <button class="btn-bank vtb btn-sm" onclick="cmd('${w.window_id}','SELECT_BANK',{bank:'vtb'})">ВТБ</button>
   </div>` : '';
 
+  const minVal = w.min_limit != null ? w.min_limit : '';
+  const maxVal = w.max_limit != null ? w.max_limit : '';
   let limitsHtml = `<div class="section-title">Лимиты (мин / макс)</div>
   <div class="limits-row">
-    <input type="number" id="min-${w.window_id}" placeholder="0" style="width:80px">
-    <input type="number" id="max-${w.window_id}" placeholder="50000" style="width:80px">
+    <input type="number" id="min-${w.window_id}" value="${minVal}" placeholder="${w.min_limit ?? 0}" style="width:80px">
+    <input type="number" id="max-${w.window_id}" value="${maxVal}" placeholder="${w.max_limit ?? 50000}" style="width:80px">
     <button class="btn-sm btn-primary" onclick="saveLimits('${w.window_id}')">Сохранить</button>
   </div>`;
 
@@ -240,7 +243,7 @@ function buildCard(w) {
   return `<div class="card" id="card-${w.window_id}">
     <div class="card-header">
       <span class="card-label">${w.label}</span>
-      <span class="badge ${w.status}">${w.status}</span>
+      <span class="badge ${w.status}">${STATUS_LABELS[w.status] || w.status}</span>
     </div>
     <div class="card-body">
       ${errorHtml}
@@ -253,6 +256,16 @@ function buildCard(w) {
     </div>
   </div>`;
 }
+
+const STATUS_LABELS = {
+  'CONNECTING':    'Подключение',
+  'IDLE':          'Ожидание',
+  'SEARCHING':     'Поиск выплаты',
+  'ACTIVE_PAYOUT': 'Выплата',
+  'DISABLED':      'Отключён',
+  'ERROR':         'Ошибка',
+  'STOPPED':       'Остановлен',
+};
 
 // ---- Commands ----
 async function cmd(windowId, type, params) {

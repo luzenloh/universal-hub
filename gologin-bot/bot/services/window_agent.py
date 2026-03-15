@@ -22,6 +22,7 @@ _POLL_INTERVALS: dict[WindowStatus, float] = {
     WindowStatus.SEARCHING: 5.0,
     WindowStatus.ACTIVE_PAYOUT: 3.0,
     WindowStatus.CONNECTING: 3.0,
+    WindowStatus.DISABLED: 15.0,
     WindowStatus.ERROR: 10.0,
     WindowStatus.STOPPED: 60.0,
 }
@@ -46,9 +47,12 @@ class WindowAgent:
         self._payout: PayoutData | None = None
         self._error_msg: str | None = None
         self._last_updated: float = time.time()
+        self._min_limit: int | None = None
+        self._max_limit: int | None = None
 
         self._command_queue: Queue[tuple[CommandRequest, Future]] = Queue()
         self._stop_event = asyncio.Event()
+        self._wake_event = asyncio.Event()  # set when command arrives to interrupt sleep
         self._task: asyncio.Task | None = None
 
         # Playwright objects (kept alive)
@@ -66,6 +70,8 @@ class WindowAgent:
             payout=self._payout,
             error_msg=self._error_msg,
             last_updated=self._last_updated,
+            min_limit=self._min_limit,
+            max_limit=self._max_limit,
         )
 
     async def _set_state(
@@ -73,15 +79,21 @@ class WindowAgent:
         status: WindowStatus,
         payout: PayoutData | None = None,
         error_msg: str | None = None,
+        min_limit: int | None = None,
+        max_limit: int | None = None,
     ) -> None:
         changed = (
             self._status != status
             or self._payout != payout
             or self._error_msg != error_msg
+            or self._min_limit != min_limit
+            or self._max_limit != max_limit
         )
         self._status = status
         self._payout = payout
         self._error_msg = error_msg
+        self._min_limit = min_limit
+        self._max_limit = max_limit
         self._last_updated = time.time()
         if changed and self._on_state_change:
             try:
@@ -120,9 +132,11 @@ class WindowAgent:
 
     async def run(self) -> None:
         backoff = 2.0
+        ever_connected = False
         while not self._stop_event.is_set():
             try:
                 await self._connect()
+                ever_connected = True
                 backoff = 2.0  # reset on successful connect
                 await self._control_loop()
             except asyncio.CancelledError:
@@ -131,8 +145,12 @@ class WindowAgent:
                 logger.error("[%s] Crashed: %s", self.label, exc)
                 await self._set_state(WindowStatus.ERROR, error_msg=str(exc))
                 await self._disconnect()
-                await asyncio.sleep(backoff)
-                backoff = min(backoff * 2, _MAX_BACKOFF)
+                if not ever_connected:
+                    # Browser still starting — retry every 3s, no exponential backoff
+                    await asyncio.sleep(3.0)
+                else:
+                    await asyncio.sleep(backoff)
+                    backoff = min(backoff * 2, _MAX_BACKOFF)
 
     async def _connect(self) -> None:
         await self._set_state(WindowStatus.CONNECTING)
@@ -143,6 +161,7 @@ class WindowAgent:
         logger.info("[%s] Connected", self.label)
 
     async def _control_loop(self) -> None:
+        poll_errors = 0
         while not self._stop_event.is_set():
             # Drain command queue first
             while not self._command_queue.empty():
@@ -151,11 +170,22 @@ class WindowAgent:
                 if not future.done():
                     future.set_result(result)
 
-            # Poll state
-            await self._poll()
+            # Poll state — tolerate up to 2 transient errors before triggering reconnect
+            try:
+                await self._poll()
+                poll_errors = 0
+            except Exception as exc:
+                poll_errors += 1
+                if poll_errors >= 3:
+                    raise  # 3 consecutive failures → reconnect
+                logger.warning("[%s] Transient poll error %d/3: %s", self.label, poll_errors, exc)
 
             interval = _POLL_INTERVALS.get(self._status, 5.0)
-            await asyncio.sleep(interval)
+            try:
+                await asyncio.wait_for(self._wake_event.wait(), timeout=interval)
+                self._wake_event.clear()
+            except asyncio.TimeoutError:
+                pass
 
     async def _poll(self) -> None:
         try:
@@ -163,7 +193,8 @@ class WindowAgent:
             payout = None
             if status == WindowStatus.ACTIVE_PAYOUT:
                 payout = await actions.extract_payout_data(self._page)
-            await self._set_state(status, payout=payout)
+            min_limit, max_limit = await actions.extract_limits(self._page)
+            await self._set_state(status, payout=payout, min_limit=min_limit, max_limit=max_limit)
         except Exception as exc:
             logger.warning("[%s] Poll error: %s", self.label, exc)
             raise  # trigger reconnect
@@ -178,6 +209,7 @@ class WindowAgent:
         loop = asyncio.get_event_loop()
         future: Future[CommandResult] = loop.create_future()
         await self._command_queue.put((cmd, future))
+        self._wake_event.set()  # interrupt sleep immediately
         try:
             return await asyncio.wait_for(asyncio.shield(future), timeout=30.0)
         except asyncio.TimeoutError:
@@ -188,24 +220,23 @@ class WindowAgent:
         try:
             if cmd.type == CommandType.REFRESH_STATE:
                 await self._poll()
+                return CommandResult(success=True)
 
             elif cmd.type == CommandType.REQUEST_PAYOUT:
                 await actions.click_request_payout(self._page)
-                await self._poll()
+                await asyncio.sleep(1.5)  # wait for SPA to update before next poll
 
             elif cmd.type == CommandType.CANCEL_PAYOUT:
                 await actions.cancel_payout(self._page)
-                await self._poll()
+                await asyncio.sleep(1.5)
 
             elif cmd.type == CommandType.SELECT_BANK:
                 bank = cmd.params.get("bank", "")
                 await actions.select_bank(self._page, bank)
-                await self._poll()
 
             elif cmd.type == CommandType.UPLOAD_RECEIPT:
                 path = cmd.params.get("path", "")
                 await actions.upload_receipt(self._page, path)
-                await self._poll()
 
             elif cmd.type == CommandType.UPDATE_LIMITS:
                 new_min = int(cmd.params.get("min", 0))

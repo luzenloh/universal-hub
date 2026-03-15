@@ -58,8 +58,23 @@ async def _extract(browser, label: str) -> dict:
     text: str = await page.inner_text("body")
     text_lower = text.lower()
 
-    if "нет активной заявки" in text_lower:
+    if "нет активной заявки" in text_lower or "получить выплату" in text_lower:
         return {"label": label, "status": "free"}
+
+    if "поиск выплаты" in text_lower or "идет поиск" in text_lower or "отменить поиск" in text_lower:
+        return {"label": label, "status": "searching"}
+
+    if "платеж не прошел" in text_lower or "проверьте корректность чека" in text_lower:
+        result: dict = {"label": label, "status": "check_failed"}
+        m = re.search(r"Переведите ровно[:\s]*([\d][\d\s]*RUB)", text)
+        if m:
+            result["amount"] = re.sub(r"\s+", " ", m.group(1)).strip()
+        # amount from "Сумма выплаты X RUB" display card
+        if "amount" not in result:
+            m = re.search(r"Сумма выплаты\s+([\d][\d\s]*RUB)", text)
+            if m:
+                result["amount"] = re.sub(r"\s+", " ", m.group(1)).strip()
+        return result
 
     if "заявка ожидает оплаты" not in text_lower:
         return {"label": label, "status": "unknown", "raw": text[:300]}
@@ -102,6 +117,11 @@ def format_results(results: list[dict]) -> str:
             lines.append(f"<b>{label}</b>: ⚠️ ошибка подключения")
         elif r.get("status") == "free":
             lines.append(f"<b>{label}</b>: нет заявки")
+        elif r.get("status") == "searching":
+            lines.append(f"<b>{label}</b>: 🔍 поиск выплаты")
+        elif r.get("status") == "check_failed":
+            amount = r.get("amount", "—")
+            lines.append(f"<b>{label}</b>: ⚠️ чек отклонён — {amount}")
         elif r.get("status") == "active":
             parts = [f"<b>{label}</b>: 💰 {r.get('amount', '—')}"]
             if "expires" in r:
@@ -114,6 +134,7 @@ def format_results(results: list[dict]) -> str:
                 parts.append(f"  📈 {r['rate']} USDT/RUB")
             lines.append("\n".join(parts))
         else:
-            lines.append(f"<b>{label}</b>: ❓ страница не распознана")
+            raw = r.get("raw", "")[:120].replace("\n", " ").strip()
+            lines.append(f"<b>{label}</b>: ❓ не распознана — <code>{raw}</code>")
 
     return "\n\n".join(lines) if lines else "Нет данных"

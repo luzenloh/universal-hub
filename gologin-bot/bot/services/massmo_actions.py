@@ -38,21 +38,30 @@ async def find_or_open_massmo_page(browser: Browser) -> Page:
 
 async def detect_state(page: Page) -> WindowStatus:
     """Detect window state from the current massmo.io page text."""
-    try:
-        await page.wait_for_load_state("networkidle", timeout=8_000)
-    except Exception:
-        pass
-
     text: str = await page.inner_text("body")
     text_lower = text.lower()
 
+    # ACTIVE_PAYOUT — highest priority
+    if "заявка ожидает оплаты" in text_lower or "платеж не прошел" in text_lower or "проверьте корректность чека" in text_lower:
+        return WindowStatus.ACTIVE_PAYOUT
+
+    # DISABLED — payouter turned off on MassMO side
+    if "is disabled" in text_lower or "payouter" in text_lower:
+        return WindowStatus.DISABLED
+
+    # SEARCHING — explicit cancel/search button text checked BEFORE idle,
+    # because "получить выплату" may still appear in page nav during search
+    if "отменить поиск" in text_lower or "идет поиск" in text_lower or "поиск выплаты" in text_lower:
+        return WindowStatus.SEARCHING
+
+    # IDLE
     if "нет активной заявки" in text_lower or "получить выплату" in text_lower:
         return WindowStatus.IDLE
-    if "заявка ожидает оплаты" in text_lower:
-        return WindowStatus.ACTIVE_PAYOUT
+
+    # Generic fallback
     if "поиск" in text_lower or "ожидание" in text_lower:
         return WindowStatus.SEARCHING
-    # If we see payout data without "ожидает оплаты" text — treat as searching
+
     return WindowStatus.SEARCHING
 
 
@@ -166,7 +175,7 @@ async def upload_receipt(page: Page, file_path: str) -> None:
 async def _set_input_field(page: Page, selector: str, value: str) -> None:
     """Click → select all → fill → Tab to trigger onBlur save."""
     field = page.locator(selector).first
-    await field.click()
+    await field.click(timeout=5_000)  # fail fast if element missing, not 30s default
     await page.keyboard.press("Control+A")
     await field.fill(value)
     await page.keyboard.press("Tab")
@@ -226,6 +235,19 @@ async def toggle_setting(page: Page, setting: str, enabled: bool) -> None:
     if is_checked != enabled:
         await checkbox.click()
         await asyncio.sleep(_UI_SETTLE)
+
+
+async def extract_limits(page: Page) -> tuple[int | None, int | None]:
+    """Read current min/max limit values from the page (displayed as text cards)."""
+    try:
+        text = await page.inner_text("body")
+        min_m = re.search(r"МИН\.?\s*сумма выплаты\s*([\d\s]+)\s*RUB", text, re.IGNORECASE)
+        max_m = re.search(r"МАКС\.?\s*сумма выплаты\s*([\d\s]+)\s*RUB", text, re.IGNORECASE)
+        min_int = int(re.sub(r"\s+", "", min_m.group(1))) if min_m else None
+        max_int = int(re.sub(r"\s+", "", max_m.group(1))) if max_m else None
+        return min_int, max_int
+    except Exception:
+        return None, None
 
 
 async def open_url_in_browser(ws_url: str, url: str) -> None:
