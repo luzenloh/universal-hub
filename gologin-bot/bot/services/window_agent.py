@@ -1,6 +1,6 @@
 """
 Per-window asyncio.Task + state machine.
-Each WindowAgent manages a persistent Playwright CDP connection to one GoLogin profile.
+Each WindowAgent manages one MassMO profile via pure REST API (no browser).
 """
 from __future__ import annotations
 
@@ -10,24 +10,33 @@ import time
 from asyncio import Future, Queue
 from typing import Callable, Coroutine, Any
 
-from playwright.async_api import async_playwright
-
-from bot.services import massmo_actions as actions
+from bot.services.massmo_api import MassmoAuthError, MassmoClient, TokenExpiredError
 from web.models.schemas import CommandRequest, CommandResult, CommandType, PayoutData, WindowState, WindowStatus
 
 logger = logging.getLogger(__name__)
 
 _POLL_INTERVALS: dict[WindowStatus, float] = {
-    WindowStatus.IDLE: 5.0,
+    WindowStatus.IDLE: 15.0,
     WindowStatus.SEARCHING: 5.0,
     WindowStatus.ACTIVE_PAYOUT: 3.0,
-    WindowStatus.CONNECTING: 3.0,
-    WindowStatus.DISABLED: 15.0,
+    WindowStatus.VERIFICATION: 5.0,
+    WindowStatus.VERIFICATION_FAILED: 10.0,
+    WindowStatus.PAID: 5.0,
+    WindowStatus.CONNECTING: 2.0,
+    WindowStatus.DISABLED: 30.0,
     WindowStatus.ERROR: 10.0,
     WindowStatus.STOPPED: 60.0,
 }
 
 _MAX_BACKOFF = 60.0
+
+_BURST_CMDS = frozenset({
+    CommandType.REQUEST_PAYOUT,
+    CommandType.CANCEL_PAYOUT,
+    CommandType.UPLOAD_RECEIPT,
+    CommandType.SELECT_SENDER_BANK,
+    CommandType.TOGGLE_SETTING,
+})
 
 
 class WindowAgent:
@@ -35,13 +44,13 @@ class WindowAgent:
         self,
         window_id: str,
         label: str,
-        ws_url: str,
+        massmo_secret: str,
         on_state_change: Callable[..., Coroutine[Any, Any, None]] | None = None,
+        cached_jwt: str | None = None,
     ) -> None:
         self.window_id = window_id
         self.label = label
-        self.ws_url = ws_url
-        self._on_state_change = on_state_change  # async callback(WindowState)
+        self._on_state_change = on_state_change
 
         self._status = WindowStatus.CONNECTING
         self._payout: PayoutData | None = None
@@ -52,13 +61,14 @@ class WindowAgent:
 
         self._command_queue: Queue[tuple[CommandRequest, Future]] = Queue()
         self._stop_event = asyncio.Event()
-        self._wake_event = asyncio.Event()  # set when command arrives to interrupt sleep
+        self._wake_event = asyncio.Event()
         self._task: asyncio.Task | None = None
+        self._burst_until: float = 0.0
 
-        # Playwright objects (kept alive)
-        self._pw = None
-        self._browser = None
-        self._page = None
+        self._client = MassmoClient(secret=massmo_secret, label=label, cached_jwt=cached_jwt)
+
+    def get_jwt(self) -> str | None:
+        return self._client.get_jwt()
 
     # ------------------------------------------------------------------ state
 
@@ -115,18 +125,8 @@ class WindowAgent:
             except asyncio.CancelledError:
                 pass
         await self._set_state(WindowStatus.STOPPED)
-        await self._disconnect()
-
-    async def _disconnect(self) -> None:
-        """Detach from browser WITHOUT closing it (keeps GoLogin profile alive)."""
-        if self._pw:
-            try:
-                await self._pw.stop()
-            except Exception:
-                pass
-            self._pw = None
-            self._browser = None
-            self._page = None
+        await self._client.logout()
+        await self._client.close()
 
     # ------------------------------------------------------------------ main loop
 
@@ -137,16 +137,19 @@ class WindowAgent:
             try:
                 await self._connect()
                 ever_connected = True
-                backoff = 2.0  # reset on successful connect
+                backoff = 2.0
                 await self._control_loop()
             except asyncio.CancelledError:
+                break
+            except MassmoAuthError as exc:
+                # Auth errors are permanent — don't retry
+                logger.error("[%s] Auth error: %s", self.label, exc)
+                await self._set_state(WindowStatus.ERROR, error_msg=str(exc))
                 break
             except Exception as exc:
                 logger.error("[%s] Crashed: %s", self.label, exc)
                 await self._set_state(WindowStatus.ERROR, error_msg=str(exc))
-                await self._disconnect()
                 if not ever_connected:
-                    # Browser still starting — retry every 3s, no exponential backoff
                     await asyncio.sleep(3.0)
                 else:
                     await asyncio.sleep(backoff)
@@ -154,62 +157,89 @@ class WindowAgent:
 
     async def _connect(self) -> None:
         await self._set_state(WindowStatus.CONNECTING)
-        logger.info("[%s] Connecting via CDP: %s", self.label, self.ws_url)
-        self._pw = await async_playwright().start()
-        self._browser = await self._pw.chromium.connect_over_cdp(self.ws_url)
-        self._page = await actions.find_or_open_massmo_page(self._browser)
+        logger.info("[%s] Connecting to MassMO API...", self.label)
+        await self._client.login()
         logger.info("[%s] Connected", self.label)
+
+    async def _drain_queue(self) -> None:
+        while not self._command_queue.empty():
+            cmd, future = await self._command_queue.get()
+            result = await self._execute_command(cmd)
+            if not future.done():
+                future.set_result(result)
 
     async def _control_loop(self) -> None:
         poll_errors = 0
         while not self._stop_event.is_set():
-            # Drain command queue first
-            while not self._command_queue.empty():
-                cmd, future = await self._command_queue.get()
-                result = await self._execute_command(cmd)
-                if not future.done():
-                    future.set_result(result)
+            await self._drain_queue()
 
-            # Poll state — tolerate up to 2 transient errors before triggering reconnect
             try:
-                await self._poll()
+                await asyncio.wait_for(self._poll(), timeout=12.0)
                 poll_errors = 0
             except Exception as exc:
                 poll_errors += 1
                 if poll_errors >= 3:
-                    raise  # 3 consecutive failures → reconnect
+                    raise
                 logger.warning("[%s] Transient poll error %d/3: %s", self.label, poll_errors, exc)
 
-            interval = _POLL_INTERVALS.get(self._status, 5.0)
+            await self._drain_queue()
+
+            if time.time() < self._burst_until:
+                interval = 0.5
+            else:
+                interval = _POLL_INTERVALS.get(self._status, 5.0)
             try:
                 await asyncio.wait_for(self._wake_event.wait(), timeout=interval)
                 self._wake_event.clear()
             except asyncio.TimeoutError:
                 pass
 
+    _NEEDS_ORDER_CHECK = frozenset({
+        WindowStatus.CONNECTING,
+        WindowStatus.ACTIVE_PAYOUT,
+        WindowStatus.VERIFICATION,
+        WindowStatus.VERIFICATION_FAILED,
+        WindowStatus.PAID,
+    })
+
     async def _poll(self) -> None:
         try:
-            status = await actions.detect_state(self._page)
-            payout = None
-            if status == WindowStatus.ACTIVE_PAYOUT:
-                payout = await actions.extract_payout_data(self._page)
-            min_limit, max_limit = await actions.extract_limits(self._page)
+            needs_order = (
+                self._status in self._NEEDS_ORDER_CHECK
+                or self._client._active_order_id is not None
+            )
+            if needs_order:
+                (status, min_limit, max_limit), (order_status, payout) = await asyncio.gather(
+                    self._client.get_state(),
+                    self._client.get_active_order(),
+                )
+                if order_status is not None:
+                    status = order_status
+            else:
+                status, min_limit, max_limit = await self._client.get_state()
+                payout = None
             await self._set_state(status, payout=payout, min_limit=min_limit, max_limit=max_limit)
+
+        except TokenExpiredError:
+            logger.info("[%s] Token expired, re-logging in...", self.label)
+            self._client._jwt = None
+            await self._client.login()
+            raise
         except Exception as exc:
             logger.warning("[%s] Poll error: %s", self.label, exc)
-            raise  # trigger reconnect
+            raise
 
     # ------------------------------------------------------------------ commands
 
     async def enqueue_command(self, cmd: CommandRequest) -> CommandResult:
-        """Called from orchestrator. Returns result when agent processes it."""
-        if self._status == WindowStatus.ERROR or self._status == WindowStatus.STOPPED:
-            return CommandResult(success=False, message=f"Window in {self._status} state")
+        if self._status in (WindowStatus.ERROR, WindowStatus.STOPPED):
+            if cmd.type != CommandType.REFRESH_STATE:
+                return CommandResult(success=False, message=f"Window in {self._status} state")
 
         loop = asyncio.get_event_loop()
         future: Future[CommandResult] = loop.create_future()
         await self._command_queue.put((cmd, future))
-        self._wake_event.set()  # interrupt sleep immediately
+        self._wake_event.set()
         try:
             return await asyncio.wait_for(asyncio.shield(future), timeout=30.0)
         except asyncio.TimeoutError:
@@ -223,30 +253,42 @@ class WindowAgent:
                 return CommandResult(success=True)
 
             elif cmd.type == CommandType.REQUEST_PAYOUT:
-                await actions.click_request_payout(self._page)
-                await asyncio.sleep(1.5)  # wait for SPA to update before next poll
+                await self._client.start_search()
+                await asyncio.sleep(0.3)
+                await self._poll()
 
             elif cmd.type == CommandType.CANCEL_PAYOUT:
-                await actions.cancel_payout(self._page)
-                await asyncio.sleep(1.5)
+                await self._client.cancel_search()
+                await asyncio.sleep(0.3)
+                await self._poll()
 
             elif cmd.type == CommandType.SELECT_BANK:
-                bank = cmd.params.get("bank", "")
-                await actions.select_bank(self._page, bank)
+                await self._client.select_bank(cmd.params.get("bank", ""))
 
             elif cmd.type == CommandType.UPLOAD_RECEIPT:
-                path = cmd.params.get("path", "")
-                await actions.upload_receipt(self._page, path)
+                await self._client.upload_receipt(cmd.params.get("path", ""))
+                await asyncio.sleep(0.3)
+                await self._poll()
 
             elif cmd.type == CommandType.UPDATE_LIMITS:
-                new_min = int(cmd.params.get("min", 0))
-                new_max = int(cmd.params.get("max", 0))
-                await actions.update_limits(self._page, new_min, new_max)
+                await self._client.update_limits(
+                    int(cmd.params.get("min", 0)),
+                    int(cmd.params.get("max", 0)),
+                )
+
+            elif cmd.type == CommandType.SELECT_SENDER_BANK:
+                await self._client.set_sender_bank(cmd.params.get("bank_alias", ""))
+                await asyncio.sleep(0.3)
+                await self._poll()
 
             elif cmd.type == CommandType.TOGGLE_SETTING:
-                setting = cmd.params.get("setting", "")
-                enabled = bool(cmd.params.get("enabled", True))
-                await actions.toggle_setting(self._page, setting, enabled)
+                await self._client.toggle_setting(
+                    cmd.params.get("setting", ""),
+                    bool(cmd.params.get("enabled", True)),
+                )
+
+            if cmd.type in _BURST_CMDS:
+                self._burst_until = time.time() + 10.0
 
             return CommandResult(success=True)
         except Exception as exc:
