@@ -1,23 +1,22 @@
 """
 Orchestrator — manages N WindowAgents for one active session.
-Global singleton shared between the Telegram bot and the FastAPI web panel.
+Global singleton shared between the Agent web panel and the FastAPI dashboard.
 """
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
+from pathlib import Path
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-
-from bot.db.models import Folder
-from bot.services.gologin import GoLoginService
 from bot.services.window_agent import WindowAgent
 from bot.services.ws_manager import WebSocketManager
 from web.models.schemas import CommandRequest, CommandResult, WindowState, WindowStatus
 
+_CACHE_FILE = Path(__file__).parent.parent.parent / "massmo_jwt_cache.json"
+
 logger = logging.getLogger(__name__)
 
-# Global singleton — initialized once in main.py, shared with bot handlers and web routes
 _orchestrator: "Orchestrator | None" = None
 
 
@@ -27,119 +26,210 @@ def get_orchestrator() -> "Orchestrator":
     return _orchestrator
 
 
-def init_orchestrator(session_factory: async_sessionmaker[AsyncSession], ws_manager: WebSocketManager) -> "Orchestrator":
+def init_orchestrator(ws_manager: WebSocketManager) -> "Orchestrator":
     global _orchestrator
-    _orchestrator = Orchestrator(session_factory=session_factory, ws_manager=ws_manager)
+    _orchestrator = Orchestrator(ws_manager=ws_manager)
     return _orchestrator
 
 
 class Orchestrator:
-    def __init__(
-        self,
-        session_factory: async_sessionmaker[AsyncSession],
-        ws_manager: WebSocketManager,
-    ) -> None:
-        self._session_factory = session_factory
+    def __init__(self, ws_manager: WebSocketManager) -> None:
         self._ws = ws_manager
-        self._gologin = GoLoginService()
         self._agents: dict[str, WindowAgent] = {}  # window_id → agent
-        self._active_profile_ids: list[str] = []
+        self._profile_map: dict[str, str] = {}  # label → GoLogin profile_id
+        self._loading_progress: dict | None = None  # {"current", "total", "label"}
+        self._cache_lock = asyncio.Lock()
+
+    # ------------------------------------------------------------------ loading UI
+
+    async def set_profile_map(self, profile_map: dict[str, str]) -> None:
+        self._profile_map = profile_map
+        await self._save_profile_map(profile_map)
+
+    def get_loading_progress(self) -> dict | None:
+        return self._loading_progress
+
+    async def update_loading(self, current: int, total: int, label: str) -> None:
+        self._loading_progress = {"current": current, "total": total, "label": label}
+        await self._ws.broadcast({"event": "loading_progress", **self._loading_progress})
+
+    async def clear_loading(self) -> None:
+        self._loading_progress = None
+        await self._ws.broadcast({"event": "loading_done"})
+
+    def get_available_labels(self) -> list[str]:
+        return sorted(
+            [label for label in self._profile_map if label not in self._agents],
+            key=lambda x: int(x[1:]) if x[1:].isdigit() else 99,
+        )
+
+    # ------------------------------------------------------------------ JWT cache
+
+    async def _save_jwt(self, label: str, jwt: str) -> None:
+        async with self._cache_lock:
+            try:
+                cache: dict = json.loads(_CACHE_FILE.read_text()) if _CACHE_FILE.exists() else {}
+                cache[label] = {"jwt": jwt}
+                _CACHE_FILE.write_text(json.dumps(cache, indent=2))
+            except Exception as exc:
+                logger.warning("Failed to save JWT cache for %s: %s", label, exc)
+
+    async def _save_profile_map(self, profile_map: dict[str, str]) -> None:
+        async with self._cache_lock:
+            try:
+                cache: dict = json.loads(_CACHE_FILE.read_text()) if _CACHE_FILE.exists() else {}
+                cache["_profile_map"] = profile_map
+                _CACHE_FILE.write_text(json.dumps(cache, indent=2))
+            except Exception as exc:
+                logger.warning("Failed to save profile map: %s", exc)
 
     # ------------------------------------------------------------------ session
 
-    async def start_session(self, token_hash: str, profile_count: int) -> list[WindowState]:
-        """
-        Look up folder by gologin_id, start profiles, create agents.
-        Used by the web panel directly.
-        token_hash = GoLogin folder UUID (Folder.gologin_id).
-        """
-        await self.stop_agents()  # stop agents (but don't stop profiles — web panel didn't start them)
-
-        async with self._session_factory() as session:
-            result = await session.execute(
-                select(Folder).where(Folder.gologin_id == token_hash)
-            )
-            folder = result.scalar_one_or_none()
-
-        if folder is None:
-            raise ValueError(f"Folder not found for token_hash: {token_hash}")
-
-        profile_ids = folder.numbered_ids[:profile_count]
-        if not profile_ids:
-            raise ValueError("No numbered profiles in this folder")
-
-        logger.info("Starting %d profiles for folder %s", len(profile_ids), folder.name)
-        start_results = await self._gologin.start_profiles(profile_ids)
-
-        self._active_profile_ids = profile_ids
-        states: list[WindowState] = []
-
-        for i, (pid, res) in enumerate(zip(profile_ids, start_results)):
-            label = f"M{i + 1}"
-            ws_url = res.get("wsUrl") if isinstance(res, dict) else None
-            if not ws_url:
-                logger.warning("No wsUrl for profile %s: %s", pid, res)
-                agent = WindowAgent(pid, label, "", on_state_change=self._on_state_change)
-                agent._status = WindowStatus.ERROR
-                agent._error_msg = f"Failed to start: {res.get('error', 'no wsUrl')}"
-            else:
-                agent = WindowAgent(pid, label, ws_url, on_state_change=self._on_state_change)
-                agent.start()
-
-            self._agents[pid] = agent
-            states.append(agent.get_state())
-
-        return states
-
-    async def attach_profiles(self, entries: list[tuple[str, str, str]]) -> list[WindowState]:
-        """
-        Called by the Telegram bot after it already started profiles.
-        entries: list of (profile_id, label, ws_url)
-        Creates WindowAgents for already-running profiles — no GoLogin calls.
-        """
+    async def attach_profiles_jwt(
+        self, entries: list[tuple[str, str, str]]
+    ) -> list[WindowState]:
+        """Create JWT-only agents. entries: (window_id, label, jwt)."""
         await self.stop_agents()
 
-        self._active_profile_ids = [pid for pid, _, _ in entries]
         states: list[WindowState] = []
-
-        for pid, label, ws_url in entries:
-            if not ws_url:
-                agent = WindowAgent(pid, label, "", on_state_change=self._on_state_change)
-                agent._status = WindowStatus.ERROR
-                agent._error_msg = "No wsUrl"
-            else:
-                agent = WindowAgent(pid, label, ws_url, on_state_change=self._on_state_change)
-                agent.start()
-
-            self._agents[pid] = agent
+        for window_id, label, jwt in entries:
+            agent = WindowAgent(window_id, label, "", cached_jwt=jwt,
+                                on_state_change=self._on_state_change)
+            self._agents[window_id] = agent
+            agent.start()
+            await self._save_jwt(label, jwt)
             states.append(agent.get_state())
 
-        # Broadcast snapshot to any open web clients
         await self._ws.broadcast({
             "event": "state_snapshot",
             "windows": [s.model_dump() for s in states],
         })
 
-        logger.info("Attached %d profiles from bot", len(entries))
+        logger.info("Attached %d JWT-agents", len(entries))
         return states
 
+    async def restore_from_cache(self) -> int:
+        """On startup: re-connect profiles from saved JWT cache. Returns count started."""
+        if not _CACHE_FILE.exists():
+            return 0
+        try:
+            cache: dict = json.loads(_CACHE_FILE.read_text())
+        except Exception as exc:
+            logger.warning("Failed to load JWT cache: %s", exc)
+            return 0
+        if not cache:
+            return 0
+
+        self._profile_map = cache.get("_profile_map") or {}
+
+        entries = sorted(
+            [(k, v) for k, v in cache.items() if k != "_profile_map"],
+            key=lambda x: int(x[0][1:]) if x[0][1:].isdigit() else 99,
+        )
+        for label, entry in entries:
+            jwt = entry.get("jwt") if isinstance(entry, dict) else None
+            if not jwt:
+                continue
+            agent = WindowAgent(label, label, "", cached_jwt=jwt,
+                                on_state_change=self._on_state_change)
+            self._agents[label] = agent
+            agent.start()
+
+        logger.info("Restored %d agents from JWT cache, profile_map=%s",
+                    len(self._agents), list(self._profile_map.keys()))
+        return len(self._agents)
+
+    async def add_profile_by_label(self, label: str) -> WindowState:
+        """Launch GoLogin browser → extract JWT via CDP → stop browser → create agent."""
+        from bot.services.gologin import GoLoginService
+        from bot.services.massmo_actions import extract_jwt
+
+        profile_id = self._profile_map.get(label)
+        if not profile_id:
+            raise ValueError(
+                f"Профиль {label} не найден в текущей папке. "
+                "Запустите смену через Telegram чтобы обновить маппинг."
+            )
+        if label in self._agents:
+            return self._agents[label].get_state()
+
+        service = GoLoginService()
+        result = await service.start_profile(profile_id)
+        ws_url = result.get("wsUrl") if isinstance(result, dict) else None
+        if not ws_url:
+            raise RuntimeError(f"GoLogin не вернул wsUrl для {label}")
+
+        await asyncio.sleep(8)
+        jwt = await extract_jwt(ws_url)
+        await service.stop_profile(profile_id)
+
+        if not jwt:
+            raise RuntimeError(
+                f"Не удалось извлечь JWT для {label}. "
+                "Убедитесь что MassMO открыт и вы авторизованы в профиле."
+            )
+
+        agent = WindowAgent(label, label, "", cached_jwt=jwt,
+                            on_state_change=self._on_state_change)
+        self._agents[label] = agent
+        agent.start()
+        await self._save_jwt(label, jwt)
+        state = agent.get_state()
+        await self._ws.broadcast({"event": "window_update", "window": state.model_dump()})
+        logger.info("Added profile %s via GoLogin CDP", label)
+        return state
+
+    async def begin_fresh_session(self) -> None:
+        """Clear old session. Call before sequential add_agent_jwt()."""
+        await self.stop_agents()
+
+    async def add_agent_jwt(self, label: str, jwt: str) -> WindowState:
+        """Add a single agent with cached JWT without stopping existing agents."""
+        if label in self._agents:
+            return self._agents[label].get_state()
+        agent = WindowAgent(label, label, "", cached_jwt=jwt,
+                            on_state_change=self._on_state_change)
+        self._agents[label] = agent
+        agent.start()
+        await self._save_jwt(label, jwt)
+        state = agent.get_state()
+        await self._ws.broadcast({"event": "window_update", "window": state.model_dump()})
+        logger.info("Added agent %s (sequential JWT)", label)
+        return state
+
+    async def remove_agent(self, window_id: str) -> None:
+        """Stop and remove a single agent, update JWT cache."""
+        agent = self._agents.pop(window_id, None)
+        if agent:
+            await agent.stop()
+        async with self._cache_lock:
+            try:
+                if _CACHE_FILE.exists():
+                    cache: dict = json.loads(_CACHE_FILE.read_text())
+                    cache.pop(window_id, None)
+                    _CACHE_FILE.write_text(json.dumps(cache, indent=2))
+            except Exception as exc:
+                logger.warning("Failed to update JWT cache after remove %s: %s", window_id, exc)
+        await self._ws.broadcast({"event": "window_removed", "window_id": window_id})
+        logger.info("Removed agent %s", window_id)
+
     async def stop_agents(self) -> None:
-        """Stop all window agents WITHOUT stopping GoLogin profiles."""
+        """Stop all window agents (logout from MassMO API)."""
         if not self._agents:
             return
         for agent in list(self._agents.values()):
             await agent.stop()
         self._agents.clear()
-        self._active_profile_ids = []
-        logger.info("Agents stopped")
+        async with self._cache_lock:
+            try:
+                if _CACHE_FILE.exists():
+                    _CACHE_FILE.unlink()
+            except Exception as exc:
+                logger.warning("JWT cache unlink failed: %s", exc)
+        logger.info("All agents stopped")
 
     async def stop_session(self) -> None:
-        """Stop agents AND GoLogin profiles. Used by web panel Stop button."""
-        profile_ids = list(self._active_profile_ids)
         await self.stop_agents()
-        if profile_ids:
-            await self._gologin.stop_profiles(profile_ids)
-            logger.info("Session stopped (profiles killed)")
 
     # ------------------------------------------------------------------ state
 
@@ -148,6 +238,18 @@ class Orchestrator:
 
     def is_active(self) -> bool:
         return bool(self._agents)
+
+    async def add_profile(self, window_id: str, label: str, secret: str) -> WindowState:
+        """Add or replace a single profile agent (manual connect via secret)."""
+        if window_id in self._agents:
+            await self._agents[window_id].stop()
+        agent = WindowAgent(window_id, label, secret, on_state_change=self._on_state_change)
+        agent.start()
+        self._agents[window_id] = agent
+        state = agent.get_state()
+        await self._ws.broadcast({"event": "window_update", "window": state.model_dump()})
+        logger.info("Added agent %s", label)
+        return state
 
     # ------------------------------------------------------------------ commands
 

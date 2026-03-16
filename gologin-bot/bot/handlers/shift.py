@@ -3,7 +3,7 @@ import html
 import logging
 
 import httpx
-from aiogram import Bot, F, Router
+from aiogram import F, Router
 from aiogram.types import CallbackQuery
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -164,7 +164,7 @@ async def shift_force_release_folder(callback: CallbackQuery, session: AsyncSess
         await callback.answer("Токен уже был свободен.", show_alert=True)
 
 
-# ── Launch: assign + start ТМ first ───────────────────────────────────────────
+# ── Launch: TM + M1..MN → JWT extraction → agents ─────────────────────────────
 
 @router.callback_query(F.data.startswith("shift:launch_folder:"))
 async def shift_launch_folder(callback: CallbackQuery, session: AsyncSession) -> None:
@@ -187,6 +187,7 @@ async def shift_launch_folder(callback: CallbackQuery, session: AsyncSession) ->
         return
 
     if not folder.main_profile_id:
+        await repo.release_folder(user_id)
         await callback.message.edit_text(  # type: ignore[union-attr]
             f"⚠️ Токен <b>{folder.name}</b> не содержит ТМ профиля.\n\n"
             "Обратитесь к администратору.",
@@ -195,26 +196,28 @@ async def shift_launch_folder(callback: CallbackQuery, session: AsyncSession) ->
         )
         return
 
-    numbered = folder.numbered_ids[:count]
-
     await callback.answer("Запускаем…")
     await callback.message.edit_text(  # type: ignore[union-attr]
-        f"⏳ Запускаем <b>{folder.name}</b>…",
+        f"⏳ Запускаем ТМ для <b>{folder.name}</b>…",
         parse_mode="HTML",
     )
 
     service = GoLoginService()
     tm_ws_url: str | None = None
+
+    # Step 1 — Launch TM browser
     try:
         tm_result = await service.start_profile(folder.main_profile_id)
         tm_ws_url = tm_result.get("wsUrl") if isinstance(tm_result, dict) else None
     except httpx.ConnectError:
+        await repo.release_folder(user_id)
         await callback.message.edit_text(  # type: ignore[union-attr]
             "❌ GoLogin Desktop не отвечает.\nУбедись что приложение открыто.",
             reply_markup=active_folder_keyboard(),
         )
         return
     except httpx.HTTPStatusError as e:
+        await repo.release_folder(user_id)
         safe = html.escape(e.response.text[:200])
         await callback.message.edit_text(  # type: ignore[union-attr]
             f"❌ Ошибка GoLogin {e.response.status_code}:\n<code>{safe}</code>",
@@ -223,47 +226,72 @@ async def shift_launch_folder(callback: CallbackQuery, session: AsyncSession) ->
         )
         return
     except Exception as e:
-        logger.error("Launch error: %s", e)
+        await repo.release_folder(user_id)
+        logger.error("TM launch error: %s", e)
         await callback.message.edit_text(  # type: ignore[union-attr]
-            f"❌ Ошибка: {e}",
+            f"❌ Ошибка запуска ТМ: {html.escape(str(e))}",
+            parse_mode="HTML",
             reply_markup=active_folder_keyboard(),
         )
         return
 
-    ws_entries: list[tuple[str, str]] = []
-    orchestrator_entries: list[tuple[str, str, str]] = []
-    errors: list = []
-    if numbered:
-        results = await service.start_profiles(numbered)
-        errors = [r for r in results if "error" in r]
-        for i, (pid, r) in enumerate(zip(numbered, results), start=1):
-            ws_url = r.get("wsUrl") if isinstance(r, dict) else None
-            if ws_url and "error" not in r:
-                ws_entries.append((f"M{i}", ws_url))
-                orchestrator_entries.append((pid, f"M{i}", ws_url))
+    # Step 2 — Check M-profiles exist
+    numbered_ids = folder.numbered_ids[:count]
+    if not numbered_ids:
+        await repo.release_folder(user_id)
+        await callback.message.edit_text(  # type: ignore[union-attr]
+            f"⚠️ Нет M-профилей в папке <b>{folder.name}</b>.\n\nОбратитесь к администратору.",
+            parse_mode="HTML",
+            reply_markup=active_folder_keyboard(),
+        )
+        return
 
-    text = f"✅ <b>{folder.name}</b>\nТМ + M1…M{count} запущены."
-    if errors:
-        text += f"\n⚠️ Не удалось открыть: {len(errors)}"
+    from bot.services.massmo_actions import extract_jwt, open_url_in_browser
 
+    # Step 3 — Open dashboard in TM browser immediately
+    dashboard_url = f"http://{settings.web_host}:{settings.web_port}"
+    if tm_ws_url:
+        asyncio.create_task(open_url_in_browser(tm_ws_url, dashboard_url))
+
+    # Step 4 — Prepare orchestrator session
+    orchestrator = get_orchestrator()
+    orchestrator.set_notify(callback.bot, user_id)  # type: ignore[arg-type]
+    await orchestrator.set_profile_map({f"M{i+1}": pid for i, pid in enumerate(folder.numbered_ids)})
+    await orchestrator.begin_fresh_session()
+
+    # Step 5 — Notify user and start sequential loading in background
     await callback.message.edit_text(  # type: ignore[union-attr]
-        text,
+        f"✅ <b>{folder.name}</b>\n"
+        f"Дашборд открывается в ТМ-браузере.\n"
+        f"Профили M1–M{count} подгружаются последовательно…",
         parse_mode="HTML",
         reply_markup=active_folder_keyboard(),
     )
 
-    if orchestrator_entries:
-        asyncio.create_task(get_orchestrator().attach_profiles(orchestrator_entries))
+    async def _load_profiles_sequential() -> None:
+        total = len(numbered_ids)
+        for i, pid in enumerate(numbered_ids):
+            label = f"M{i + 1}"
+            await orchestrator.update_loading(i + 1, total, label)
+            try:
+                result = await service.start_profile(pid)
+                ws_url = result.get("wsUrl") if isinstance(result, dict) else None
+                if not ws_url:
+                    logger.warning("No wsUrl for %s, skipping", label)
+                    continue
+                await asyncio.sleep(5)
+                jwt = await extract_jwt(ws_url)
+                await service.stop_profile(pid)
+                if jwt:
+                    await orchestrator.add_agent_jwt(label, jwt)
+                    logger.info("Sequential: added agent %s", label)
+                else:
+                    logger.warning("Sequential: JWT extraction failed for %s", label)
+            except Exception as exc:
+                logger.error("Sequential load error for %s: %s", label, exc)
+        await orchestrator.clear_loading()
 
-    if tm_ws_url:
-        from bot.services.massmo_actions import open_url_in_browser
-        dashboard_url = f"http://{settings.web_host}:{settings.web_port}"
-        asyncio.create_task(open_url_in_browser(tm_ws_url, dashboard_url))
-
-    if ws_entries:
-        bot: Bot = callback.bot  # type: ignore[assignment]
-        chat_id = callback.message.chat.id  # type: ignore[union-attr]
-        asyncio.create_task(_send_massmo_report(bot, chat_id, ws_entries))
+    asyncio.create_task(_load_profiles_sequential())
 
 
 # ── Release ────────────────────────────────────────────────────────────────────
@@ -273,24 +301,20 @@ async def shift_release(callback: CallbackQuery, session: AsyncSession) -> None:
     user_id = callback.from_user.id  # type: ignore[union-attr]
 
     repo = FolderRepository(session)
-    folder = await repo.release_folder(user_id)
 
+    # Check there is an active folder before stopping agents
+    folder = await repo.get_active_folder(user_id)
     if not folder:
         await callback.answer("Активный токен не найден.", show_alert=True)
         return
 
-    # Stop all profiles best-effort
-    all_ids: list[str] = []
-    if folder.main_profile_id:
-        all_ids.append(folder.main_profile_id)
-    if folder.selected_count is not None:
-        all_ids.extend(folder.numbered_ids[: folder.selected_count])
+    # Stop agents first so the next operator doesn't grab a busy folder
+    await get_orchestrator().stop_agents()
 
-    if all_ids:
-        service = GoLoginService()
-        await service.stop_profiles(all_ids)
-
-    asyncio.create_task(get_orchestrator().stop_agents())
+    folder = await repo.release_folder(user_id)
+    if not folder:
+        await callback.answer("Активный токен не найден.", show_alert=True)
+        return
 
     await callback.message.edit_text(  # type: ignore[union-attr]
         "Смена завершена. Хорошей работы!",
@@ -299,15 +323,3 @@ async def shift_release(callback: CallbackQuery, session: AsyncSession) -> None:
     await callback.answer()
 
 
-# ── Background: scrape MassMO and report ──────────────────────────────────────
-
-async def _send_massmo_report(bot: Bot, chat_id: int, ws_entries: list[tuple[str, str]]) -> None:
-    from bot.services.massmo import format_results, scrape_profiles
-
-    try:
-        results = await scrape_profiles(ws_entries)
-        text = format_results(results)
-        await bot.send_message(chat_id, text, parse_mode="HTML")
-    except Exception as e:
-        logger.error("MassMO report error: %s", e)
-        await bot.send_message(chat_id, f"⚠️ Не удалось собрать данные с MassMO: {e}")
