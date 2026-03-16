@@ -1,0 +1,8 @@
+.env
+.env.agent
+.env.hub
+massmo_jwt_cache.json
+*.db
+__pycache__/
+*.pyc
+.venv/
