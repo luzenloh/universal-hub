@@ -1,11 +1,13 @@
+from __future__ import annotations
 import asyncio
 import logging
 
 import httpx
 
+from bot.core.config import settings
+
 logger = logging.getLogger(__name__)
 
-GOLOGIN_LOCAL_URL = "http://localhost:36912"
 GOLOGIN_API_URL = "https://api.gologin.com"
 
 
@@ -14,7 +16,7 @@ class GoLoginService:
 
     async def start_profile(self, profile_id: str) -> dict:
         """Start profile via GoLogin Desktop. Returns dict with wsUrl."""
-        url = f"{GOLOGIN_LOCAL_URL}/browser/start-profile"
+        url = f"{settings.gologin_local_url}/browser/start-profile"
         async with httpx.AsyncClient(timeout=60) as client:
             response = await client.post(url, json={"profileId": profile_id, "sync": True})
             response.raise_for_status()
@@ -22,7 +24,7 @@ class GoLoginService:
 
     async def stop_profile(self, profile_id: str) -> None:
         """Stop profile via GoLogin Desktop."""
-        url = f"{GOLOGIN_LOCAL_URL}/browser/stop-profile"
+        url = f"{settings.gologin_local_url}/browser/stop-profile"
         async with httpx.AsyncClient(timeout=10) as client:
             response = await client.post(url, json={"profileId": profile_id})
             response.raise_for_status()
@@ -31,17 +33,25 @@ class GoLoginService:
         """Start multiple profiles concurrently. Returns list of results (or error dicts).
         If a profile returns empty wsUrl (already running), stops and restarts it to get a fresh wsUrl.
         """
-        sem = asyncio.Semaphore(5)  # limit concurrent GoLogin Desktop calls
+        batch_size = 3  # GoLogin Desktop struggles with more than 3 simultaneous starts
+        results: list[dict] = []
 
-        async def _start(pid: str) -> dict:
-            async with sem:
+        for i in range(0, len(profile_ids), batch_size):
+            batch = profile_ids[i:i + batch_size]
+
+            async def _start(pid: str) -> dict:
                 try:
                     return await self.start_profile(pid)
                 except Exception as e:
                     logger.error("Failed to start profile %s: %s", pid, e)
                     return {"error": str(e), "profileId": pid}
 
-        results: list[dict] = list(await asyncio.gather(*[_start(pid) for pid in profile_ids]))
+            batch_results = list(await asyncio.gather(*[_start(pid) for pid in batch]))
+            results.extend(batch_results)
+
+            # Pause between batches so GoLogin Desktop can settle
+            if i + batch_size < len(profile_ids):
+                await asyncio.sleep(3)
 
         # Profiles already running return empty wsUrl — stop and restart them
         stale = [

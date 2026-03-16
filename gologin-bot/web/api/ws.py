@@ -1,3 +1,5 @@
+from __future__ import annotations
+import asyncio
 import logging
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -28,11 +30,12 @@ def make_ws_router(ws_manager: WebSocketManager) -> APIRouter:
 
         try:
             while True:
-                await websocket.receive_text()
+                await asyncio.sleep(25)
+                await websocket.send_json({"event": "ping"})
         except WebSocketDisconnect:
             pass
         except Exception as exc:
-            logger.warning("WS error: %s", exc)
+            logger.warning("WS connection lost: %s", exc)
         finally:
             ws_manager.disconnect(websocket)
 

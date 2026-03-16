@@ -5,306 +5,1773 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>MassMO Controller</title>
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f0f13; color: #e0e0e0; min-height: 100vh; }
+/* ─── Reset & Base ─────────────────────────────────────────── */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+  background: #f2f2f7;
+  color: #1c1c1e;
+  min-height: 100vh;
+}
 
-  .header { background: #1a1a24; padding: 16px 24px; border-bottom: 1px solid #2a2a3a; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
-  .header h1 { font-size: 20px; font-weight: 600; color: #fff; }
-  .ws-indicator { width: 10px; height: 10px; border-radius: 50%; background: #555; flex-shrink: 0; }
-  .ws-indicator.connected { background: #22c55e; }
-  .ws-indicator.error { background: #ef4444; }
+/* ─── In-card Auth Form ────────────────────────────────────── */
+.card-auth {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  padding: 8px 0 4px;
+}
+.card-auth-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1c2340;
+  margin-bottom: 4px;
+}
+.card-auth-sub {
+  font-size: 12px;
+  color: #8b93b8;
+  margin-bottom: 16px;
+}
+.card-auth-input-wrap {
+  width: 100%;
+  position: relative;
+  margin-bottom: 10px;
+}
+.card-auth-icon {
+  position: absolute;
+  left: 13px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #8b93b8;
+  font-size: 14px;
+  pointer-events: none;
+}
+.card-auth-input {
+  width: 100%;
+  padding: 11px 12px 11px 34px;
+  border: none;
+  border-radius: 10px;
+  background: #f0f2fa;
+  font-size: 13px;
+  color: #1c2340;
+  outline: none;
+  transition: background 0.15s, box-shadow 0.15s;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+.card-auth-input:focus {
+  background: #e8ebf8;
+  box-shadow: 0 0 0 2px #7b88d4;
+}
+.card-auth-input::placeholder { color: #b0b8d8; }
+.card-auth-btn {
+  width: 100%;
+  padding: 11px;
+  border: none;
+  border-radius: 10px;
+  background: #7b88d4;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+}
+.card-auth-btn:hover { background: #6a78c8; }
+.card-auth-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.card-auth-error {
+  margin-top: 8px;
+  font-size: 11px;
+  color: #ef4444;
+  min-height: 14px;
+  text-align: center;
+}
 
-  .controls { background: #1a1a24; padding: 16px 24px; border-bottom: 1px solid #2a2a3a; display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
-  .field { display: flex; flex-direction: column; gap: 6px; }
-  .field label { font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; }
-  input[type="text"], input[type="number"] {
-    background: #0f0f13; border: 1px solid #2a2a3a; color: #e0e0e0; padding: 8px 12px;
-    border-radius: 6px; font-size: 14px; outline: none; min-width: 160px;
-  }
-  input[type="text"]:focus, input[type="number"]:focus { border-color: #6366f1; }
+/* ─── Navbar ────────────────────────────────────────────────── */
+.navbar {
+  background: #fff;
+  border-bottom: 1px solid #e5e5ea;
+  padding: 0 24px;
+  height: 54px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 1px 0 #e5e5ea;
+}
+.navbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #1c1c1e;
+  text-decoration: none;
+}
+.navbar-tabs {
+  display: flex;
+  gap: 2px;
+  margin-left: 12px;
+}
+.tab-btn {
+  padding: 5px 13px;
+  border-radius: 7px;
+  border: none;
+  background: transparent;
+  color: #6d6d72;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.tab-btn.active { background: #f2f2f7; color: #1c1c1e; font-weight: 600; }
+.tab-btn:hover:not(.active) { background: #f7f7fa; }
+.navbar-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.ws-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: #c7c7cc;
+  flex-shrink: 0;
+  transition: background 0.3s;
+}
+.ws-dot.connected { background: #34c759; }
+.ws-dot.error     { background: #ff3b30; }
+.ws-label { font-size: 12px; color: #8e8e93; }
+.btn-nav {
+  padding: 6px 13px;
+  border: none;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: opacity 0.15s;
+}
+.btn-nav:hover { opacity: 0.82; }
+.btn-nav:disabled { opacity: 0.35; cursor: not-allowed; }
 
-  button { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500; transition: opacity 0.15s; }
-  button:hover { opacity: 0.85; }
-  button:disabled { opacity: 0.4; cursor: not-allowed; }
-  .btn-primary { background: #6366f1; color: #fff; }
-  .btn-danger { background: #ef4444; color: #fff; }
-  .btn-sm { padding: 5px 10px; font-size: 12px; }
-  .btn-bank { background: #1e2030; color: #e0e0e0; border: 1px solid #2a2a3a; }
-  .btn-bank.tinkoff { border-color: #fbbf24; color: #fbbf24; }
-  .btn-bank.sber { border-color: #22c55e; color: #22c55e; }
-  .btn-bank.alfa { border-color: #ef4444; color: #ef4444; }
-  .btn-bank.vtb { border-color: #3b82f6; color: #3b82f6; }
+/* ─── Add Profile Card ─────────────────────────────────────── */
+.add-profile-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 220px;
+  border: 2px dashed #7b88d4;
+  border-radius: 16px;
+  cursor: pointer;
+  background: #f8f9ff;
+  transition: background 0.15s, border-color 0.15s;
+  gap: 10px;
+  color: #7b88d4;
+  user-select: none;
+}
+.add-profile-card:hover { background: #eef0fb; border-color: #5b6cbf; }
+.add-profile-icon {
+  width: 52px; height: 52px;
+  border-radius: 50%;
+  background: #7b88d4;
+  color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 30px; font-weight: 300; line-height: 1;
+}
+.add-profile-lbl { font-size: 14px; font-weight: 600; color: #7b88d4; }
 
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; padding: 20px 24px; }
+/* ─── Add Profile Modal ─────────────────────────────────────── */
+.add-modal-overlay {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 1000;
+  align-items: center;
+  justify-content: center;
+}
+.add-modal-overlay.open { display: flex; }
+.add-modal {
+  background: #fff;
+  border-radius: 18px;
+  width: 340px;
+  padding: 24px 24px 20px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.18);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.add-modal h3 { font-size: 17px; font-weight: 700; color: #1c2340; margin: 0; }
+.add-modal p  { font-size: 12px; color: #8b93b8; margin: -8px 0 0; }
+.add-modal-field { display: flex; flex-direction: column; gap: 5px; }
+.add-modal-field label { font-size: 12px; font-weight: 600; color: #6b7280; }
+.add-modal-field input {
+  padding: 10px 12px;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 10px;
+  font-size: 13px;
+  color: #1c2340;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.add-modal-field input:focus { border-color: #7b88d4; }
+.add-modal-err { font-size: 11px; color: #ef4444; min-height: 14px; }
+.add-modal-btns { display: flex; gap: 8px; }
+.add-modal-btns button { flex: 1; padding: 11px; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; }
+.add-modal-submit { background: #7b88d4; color: #fff; }
+.add-modal-submit:hover { background: #6a78c8; }
+.add-modal-submit:disabled { opacity: 0.55; cursor: not-allowed; }
+.add-modal-cancel-btn { background: #f2f2f7; color: #6b7280; }
+.add-modal-cancel-btn:hover { background: #e5e5ea; }
 
-  .card { background: #1a1a24; border: 1px solid #2a2a3a; border-radius: 10px; overflow: hidden; }
-  .card-header { padding: 12px 16px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #2a2a3a; }
-  .card-label { font-size: 16px; font-weight: 600; color: #fff; }
-  .badge { padding: 3px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-left: auto; }
-  .badge.CONNECTING { background: #374151; color: #9ca3af; }
-  .badge.IDLE       { background: #064e3b; color: #34d399; }
-  .badge.SEARCHING  { background: #1e3a5f; color: #60a5fa; }
-  .badge.ACTIVE_PAYOUT { background: #451a03; color: #fb923c; }
-  .badge.DISABLED   { background: #2d1b69; color: #a78bfa; }
-  .badge.ERROR      { background: #450a0a; color: #f87171; }
-  .badge.STOPPED    { background: #1f2937; color: #6b7280; }
+/* ─── Bank Picker Modal ────────────────────────────────────── */
+.bank-modal-overlay {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 1000;
+  align-items: center;
+  justify-content: center;
+}
+.bank-modal-overlay.open { display: flex; }
+.bank-modal {
+  background: #fff;
+  border-radius: 18px;
+  width: 360px;
+  max-width: 95vw;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.18);
+}
+.bank-modal-head {
+  padding: 18px 18px 10px;
+  text-align: center;
+  border-bottom: 1px solid #f2f2f7;
+  flex-shrink: 0;
+}
+.bank-modal-head h3 { font-size: 16px; font-weight: 700; margin-bottom: 3px; }
+.bank-modal-head p  { font-size: 12px; color: #8e8e93; }
+.bank-search-wrap {
+  padding: 10px 14px 6px;
+  flex-shrink: 0;
+}
+.bank-search {
+  width: 100%;
+  padding: 9px 12px 9px 34px;
+  border: 1.5px solid #e5e5ea;
+  border-radius: 10px;
+  background: #f2f2f7;
+  font-size: 13px;
+  outline: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='16' height='16' viewBox='0 0 24 24' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='11' cy='11' r='7' stroke='%238e8e93' stroke-width='2'/%3E%3Cpath d='M16.5 16.5l4 4' stroke='%238e8e93' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: 10px center;
+}
+.bank-search:focus { border-color: #007aff; background-color: #fff; }
+.bank-list {
+  overflow-y: auto;
+  flex: 1;
+  padding: 4px 0 8px;
+}
+.bank-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 16px;
+  cursor: pointer;
+  transition: background 0.1s;
+  font-size: 14px;
+  color: #1c1c1e;
+}
+.bank-item:hover { background: #f2f2f7; }
+.bank-item.selected { background: #eff6ff; color: #2563eb; font-weight: 600; }
+.bank-item img {
+  width: 28px; height: 28px;
+  border-radius: 6px;
+  object-fit: contain;
+  flex-shrink: 0;
+  background: #f2f2f7;
+}
+.bank-modal-cancel {
+  margin: 0 14px 14px;
+  padding: 11px;
+  border: 1.5px solid #e5e5ea;
+  border-radius: 10px;
+  background: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  color: #ef4444;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.bank-modal-cancel:hover { background: #fff5f5; }
 
-  .card-body { padding: 14px 16px; }
-  .payout-info { background: #0f0f13; border-radius: 6px; padding: 10px 12px; margin-bottom: 12px; font-size: 13px; line-height: 1.8; }
-  .payout-info .amount { font-size: 18px; font-weight: 700; color: #fb923c; }
-  .payout-info .label-row { color: #888; font-size: 11px; text-transform: uppercase; }
-  .error-msg { color: #f87171; font-size: 12px; margin-bottom: 10px; word-break: break-all; }
+/* ─── Bank selector row in card ─────────────────────────────── */
+.bank-selector-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 12px;
+  background: #f9f9fb;
+  border: 1.5px solid #e5e5ea;
+  border-radius: 9px;
+  margin-bottom: 6px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.bank-selector-row:hover { border-color: #007aff; background: #f0f6ff; }
+.bank-selector-left { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #1c1c1e; }
+.bank-selector-left img { width: 22px; height: 22px; border-radius: 5px; background: #e5e5ea; }
+.bank-selector-choose { font-size: 12px; color: #007aff; font-weight: 500; white-space: nowrap; }
 
-  .actions { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+/* ─── Drop Zone ────────────────────────────────────────────── */
+.drop-zone {
+  border: 2px dashed #e5e5ea;
+  border-radius: 10px;
+  padding: 12px;
+  text-align: center;
+  color: #8e8e93;
+  font-size: 12px;
+  margin-bottom: 8px;
+  transition: border-color 0.15s, background 0.15s;
+  cursor: pointer;
+}
+.drop-zone.drag-over {
+  border-color: #007aff;
+  background: #f0f6ff;
+  color: #007aff;
+}
 
-  .section-title { font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
-  .banks { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+/* ─── Offline Banner ───────────────────────────────────────── */
+.offline-banner {
+  display: none;
+  background: #fff3cd;
+  color: #856404;
+  font-size: 13px;
+  text-align: center;
+  padding: 7px 16px;
+  border-bottom: 1px solid #ffc107;
+}
+.offline-banner.visible { display: block; }
 
-  .limits-row { display: flex; gap: 8px; align-items: flex-end; margin-bottom: 12px; }
-  .limits-row input { width: 90px; }
+/* ─── Views ────────────────────────────────────────────────── */
+.view { display: none; }
+.view.active { display: block; }
 
-  .toggles { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
-  .toggle-item { display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; }
-  .toggle-item input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-color: #6366f1; }
+/* ─── Grid ─────────────────────────────────────────────────── */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+  padding: 20px 24px 90px;
+}
+.empty-state {
+  grid-column: 1/-1;
+  text-align: center;
+  color: #c7c7cc;
+  padding: 80px 24px;
+  font-size: 15px;
+}
 
-  .upload-row { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
-  .upload-row input[type="file"] { font-size: 12px; color: #888; flex: 1; min-width: 0; }
+/* ─── Window Card ──────────────────────────────────────────── */
+.mm-card {
+  background: #fff;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid rgba(0,0,0,0.07);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06), 0 0 1px rgba(0,0,0,0.04);
+}
 
-  .empty-state { text-align: center; color: #555; padding: 60px 24px; font-size: 15px; }
+/* Mini header */
+.mm-card-head {
+  background: #fff;
+  border-bottom: 1px solid #f2f2f7;
+  padding: 9px 14px;
+  display: flex;
+  align-items: center;
+}
+.mm-profile-lbl {
+  flex: 1;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: #1c1c1e;
+}
+.card-reload-btn {
+  background: none; border: none; cursor: pointer;
+  color: #8e8e93; padding: 3px; border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  transition: color 0.15s, background 0.15s;
+  flex-shrink: 0;
+}
+.card-reload-btn:hover { color: #3b82f6; background: #eff6ff; }
+@keyframes spin-reload { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.card-reload-btn.spinning svg { animation: spin-reload 0.7s linear infinite; }
 
-  .log { position: fixed; bottom: 0; left: 0; right: 0; background: #0f0f13; border-top: 1px solid #2a2a3a; padding: 8px 16px; font-size: 12px; color: #666; font-family: monospace; max-height: 80px; overflow-y: auto; }
+/* Limits display */
+.mm-limits-bar {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 10px 12px;
+  background: #f9f9fb;
+  border-bottom: 1px solid #f2f2f7;
+}
+.mm-lim-card {
+  background: #fff;
+  border: 1px solid #e5e5ea;
+  border-radius: 10px;
+  padding: 7px 10px;
+}
+.mm-lim-title {
+  font-size: 9px;
+  font-weight: 700;
+  color: #8e8e93;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-bottom: 4px;
+}
+.mm-lim-val {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #1c1c1e;
+}
+
+/* State body */
+.mm-state-body {
+  padding: 22px 16px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  min-height: 200px;
+  justify-content: center;
+}
+.state-icon-wrap {
+  width: 54px; height: 54px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 13px;
+  flex-shrink: 0;
+}
+.ic-idle     { background: #dbeafe; }
+.ic-search   { background: #fff7ed; }
+.ic-payout        { background: #fff7ed; }
+.ic-paid          { background: #dcfce7; }
+.ic-disabled      { background: #f3e8ff; }
+.ic-error         { background: #fee2e2; }
+.ic-connect       { background: #f2f2f7; }
+.ic-stopped       { background: #f2f2f7; }
+.ic-verification  { background: #fff7ed; }
+.ic-verif-failed  { background: #fee2e2; }
+
+.state-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1c1c1e;
+  margin-bottom: 5px;
+  line-height: 1.35;
+}
+.state-sub {
+  font-size: 12px;
+  color: #8e8e93;
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+
+.mm-act-btn {
+  padding: 11px 0;
+  border-radius: 11px;
+  border: none;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  width: 100%;
+  max-width: 270px;
+}
+.mm-act-btn:hover { opacity: 0.78; }
+.mm-btn-blue  { background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; }
+.mm-btn-red   { background: #fff5f5; color: #ef4444; border: 1px solid #fecaca; }
+.mm-btn-gray  { background: #f9f9fb; color: #1c1c1e; border: 1px solid #e5e5ea; }
+
+.mm-info-section { width: 100%; padding: 0 12px 10px; }
+.mm-info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 9px 12px;
+  background: #f9f9fb;
+  border: 1px solid #e5e5ea;
+  border-radius: 9px;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+.mm-ir-label { color: #8e8e93; }
+.mm-ir-value { color: #2563eb; font-weight: 600; }
+.mm-ir-value.big { font-size: 16px; font-weight: 700; }
+.mm-bank-block {
+  background: #f9f9fb;
+  border: 1px solid #e5e5ea;
+  border-radius: 9px;
+  padding: 10px 12px;
+  margin-bottom: 6px;
+}
+.mm-bank-name { font-size: 13px; font-weight: 600; color: #1c1c1e; }
+.mm-bank-phone { font-size: 13px; color: #2563eb; margin-top: 3px; }
+.mm-next-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: #f9f9fb;
+  border: 1px solid #e5e5ea;
+  border-radius: 9px;
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: #2563eb;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.mm-next-btn:hover { opacity: 0.78; }
+.mm-section-lbl {
+  font-size: 11px;
+  color: #8e8e93;
+  text-align: center;
+  margin: 4px 0 8px;
+}
+
+/* Controls panel */
+.mm-controls {
+  padding: 10px 12px 12px;
+  border-top: 1px solid #f2f2f7;
+}
+.mm-ctrl-title {
+  font-size: 9px;
+  font-weight: 700;
+  color: #8e8e93;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 7px;
+}
+.mm-upload-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.mm-upload-row input[type="file"] {
+  font-size: 11px;
+  color: #8e8e93;
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+.mm-upload-btn {
+  padding: 6px 11px;
+  border-radius: 6px;
+  border: none;
+  background: #34c759;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.mm-upload-btn:hover { opacity: 0.82; }
+.mm-refresh-btn {
+  width: 100%;
+  padding: 6px;
+  border-radius: 7px;
+  border: 1px solid #e5e5ea;
+  background: #f9f9fb;
+  color: #8e8e93;
+  font-size: 12px;
+  cursor: pointer;
+  margin-top: 2px;
+}
+.mm-refresh-btn:hover { background: #f2f2f7; }
+.mm-error-bar {
+  color: #ef4444;
+  font-size: 11px;
+  padding: 4px 12px;
+  word-break: break-all;
+}
+
+/* Profiles view */
+.profiles-wrap { padding: 20px 24px 90px; }
+.profiles-wrap h2 {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1c1c1e;
+  margin-bottom: 16px;
+}
+.profiles-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.p-chip {
+  background: #fff;
+  border: 1px solid #e5e5ea;
+  border-radius: 12px;
+  padding: 12px 13px;
+  min-width: 162px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+.p-chip-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 9px;
+}
+.p-chip-lbl { font-size: 15px; font-weight: 700; color: #1c1c1e; }
+.p-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 20px;
+  text-transform: uppercase;
+}
+.pb-IDLE              { background: #dcfce7; color: #166534; }
+.pb-SEARCHING         { background: #fff7ed; color: #9a3412; }
+.pb-ACTIVE_PAYOUT     { background: #fff3e0; color: #92400e; }
+.pb-PAID              { background: #f0fdf4; color: #14532d; }
+.pb-DISABLED          { background: #f3e8ff; color: #6b21a8; }
+.pb-ERROR             { background: #fee2e2; color: #991b1b; }
+.pb-VERIFICATION      { background: #fff7ed; color: #9a3412; }
+.pb-VERIFICATION_FAILED { background: #fee2e2; color: #991b1b; }
+.pb-CONNECTING   { background: #f2f2f7; color: #6d6d72; }
+.pb-STOPPED      { background: #f2f2f7; color: #aeaeb2; }
+.p-lim-inputs {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+.p-lim-inputs span {
+  font-size: 10px;
+  color: #8e8e93;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.p-lim-inputs input {
+  width: 62px;
+  padding: 5px 7px;
+  font-size: 12px;
+  border-radius: 6px;
+  border: 1.5px solid #e5e5ea;
+  background: #f2f2f7;
+  color: #1c1c1e;
+  outline: none;
+}
+.p-lim-inputs input:focus { border-color: #007aff; background: #fff; }
+.p-save-btn {
+  width: 100%;
+  padding: 7px;
+  border-radius: 8px;
+  border: none;
+  background: #007aff;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.p-save-btn:hover { opacity: 0.82; }
+
+/* Inputs */
+input[type="text"], input[type="number"] {
+  background: #f2f2f7;
+  border: 1.5px solid #e5e5ea;
+  color: #1c1c1e;
+  padding: 7px 11px;
+  border-radius: 8px;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+input[type="text"]:focus, input[type="number"]:focus {
+  border-color: #007aff;
+  background: #fff;
+}
+
+/* ─── Auto-next PAID countdown ─────────────────────────────── */
+.auto-next-bar {
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 10px; padding: 8px 13px;
+  background: #f0fdf4; border-radius: 10px;
+  font-size: 13px; color: #16a34a;
+  border: 1px solid #86efac;
+}
+.anb-timer { font-weight: 700; font-size: 15px; }
+.anb-cancel {
+  margin-left: auto; background: none; border: none;
+  cursor: pointer; color: #9ca3af; font-size: 18px; line-height: 1;
+  padding: 0 2px; border-radius: 4px; transition: color 0.15s;
+}
+.anb-cancel:hover { color: #ef4444; }
+
+/* ─── Card remove button ────────────────────────────────────── */
+.card-remove-btn {
+  margin-left: auto;
+  background: none; border: none; cursor: pointer;
+  color: #d1d5db; font-size: 16px; line-height: 1;
+  padding: 2px 5px; border-radius: 5px;
+  transition: color 0.15s, background 0.15s;
+}
+.card-remove-btn:hover { color: #ef4444; background: #fee2e2; }
+
+/* ─── Bulk limits bar ───────────────────────────────────────── */
+.bulk-limits-bar {
+  background: #fff; border-radius: 12px; border: 1px solid #e5e5ea;
+  padding: 12px 16px; margin-bottom: 16px;
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+}
+.bulk-limits-bar .blb-label { font-size: 13px; color: #6b7280; font-weight: 600; }
+.bulk-limits-bar input {
+  width: 90px; padding: 7px 10px;
+  border: 1.5px solid #e5e7eb; border-radius: 8px;
+  font-size: 13px; outline: none;
+}
+.bulk-limits-bar input:focus { border-color: #7b88d4; }
+.bulk-limits-bar button {
+  padding: 7px 16px; background: #7b88d4; color: #fff;
+  border: none; border-radius: 8px; font-size: 13px;
+  font-weight: 600; cursor: pointer;
+}
+.bulk-limits-bar button:hover { background: #6a78c8; }
+
+/* ─── Profile Grid Picker ───────────────────────────────────── */
+.pgp-wrap { display: flex; flex-direction: column; align-items: center; padding: 4px 0 8px; }
+.pgp-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 44px);
+  gap: 5px;
+  user-select: none;
+}
+.pgp-cell {
+  width: 44px; height: 44px;
+  border-radius: 8px;
+  border: 2px solid #e5e7eb;
+  background: #f9fafb;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; color: #d1d5db;
+  transition: background 0.06s, border-color 0.06s, color 0.06s;
+  cursor: default;
+}
+.pgp-cell.pgp-active {
+  background: #2563eb;
+  border-color: #1d4ed8;
+  color: #fff;
+}
+.pgp-cell.pgp-avail {
+  background: #fff;
+  border-color: #d1d5db;
+  color: #6b7280;
+  cursor: crosshair;
+}
+.pgp-cell.pgp-selected {
+  background: #bfdbfe;
+  border-color: #60a5fa;
+  color: #1e40af;
+}
+.pgp-cell.pgp-disabled {
+  background: #f3f4f6;
+  border-color: #e5e7eb;
+  color: #e5e7eb;
+}
+.pgp-count {
+  margin-top: 10px;
+  font-size: 13px; font-weight: 600;
+  color: #374151;
+  min-height: 20px; text-align: center;
+}
+.pgp-progress-bar {
+  width: 100%; height: 4px;
+  background: #dbeafe; border-radius: 2px;
+  overflow: hidden; margin-top: 10px;
+  display: none;
+}
+.pgp-progress-fill {
+  height: 100%; background: #3b82f6;
+  border-radius: 2px;
+  transition: width 0.3s;
+}
+
+/* ─── Navbar loading status ─────────────────────────────────── */
+.nav-load-status {
+  display: none;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: #6b7280;
+  background: #f2f2f7;
+  border-radius: 8px;
+  padding: 5px 10px;
+}
+.nav-load-status.visible { display: flex; }
+.nav-load-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  border-top-color: #3b82f6;
+  border-right-color: #3b82f6;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+.nav-load-bar {
+  width: 80px; height: 3px;
+  background: #e5e7eb; border-radius: 2px; overflow: hidden;
+}
+.nav-load-fill {
+  height: 100%; background: #3b82f6; border-radius: 2px;
+  transition: width 0.3s;
+}
+
+/* ─── Spinner ──────────────────────────────────────────────── */
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinner {
+  width: 28px; height: 28px;
+  border: 3px solid transparent;
+  border-radius: 50%;
+  animation: spin 0.85s linear infinite;
+}
+.sp-orange { border-top-color: #f97316; border-right-color: #f97316; }
+.sp-gray   { border-top-color: #aeaeb2; border-right-color: #aeaeb2; }
+
+/* ─── Navbar icon buttons ──────────────────────────────────── */
+.btn-nav-icon {
+  width: 32px; height: 32px;
+  border: none; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; flex-shrink: 0;
+  transition: background 0.15s, color 0.15s, opacity 0.15s;
+}
+.btn-nav-icon:disabled { opacity: 0.35; cursor: not-allowed; }
+.btn-search-all-combined {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: #34c759; color: #fff;
+  border: none; border-radius: 8px; padding: 6px 12px;
+  font-size: 13px; font-weight: 600; cursor: pointer; transition: opacity .15s;
+}
+.btn-search-all-combined:hover:not(:disabled) { opacity: 0.82; }
+.btn-search-all-combined:disabled { opacity: 0.35; cursor: not-allowed; }
+.btn-search-all-combined.searching { background: #ff3b30; }
+.btn-hide-inactive { background: #f2f2f7; color: #6d6d72; }
+.btn-hide-inactive:hover { background: #e5e5ea; }
+.btn-hide-inactive.active { background: #fff3cd; color: #b45309; }
+
+/* ─── Bulk limits navbar popover ───────────────────────────── */
+.bulk-nav-wrap { position: relative; }
+.bulk-nav-popover {
+  display: none;
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: #fff;
+  border: 1px solid #e5e5ea;
+  border-radius: 12px;
+  padding: 14px 16px 16px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.13);
+  width: 260px;
+  z-index: 200;
+  flex-direction: column;
+  gap: 10px;
+}
+.bulk-nav-popover.open { display: flex; }
+.bnp-title { font-size: 13px; font-weight: 700; color: #1c1c1e; }
+.bnp-row { display: flex; gap: 8px; }
+.bnp-field { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.bnp-field label { font-size: 10px; font-weight: 700; color: #8e8e93; text-transform: uppercase; letter-spacing: 0.3px; }
+.bnp-field input { width: 100%; padding: 7px 10px; border: 1.5px solid #e5e7eb; border-radius: 8px; font-size: 13px; outline: none; }
+.bnp-field input:focus { border-color: #7b88d4; background: #fff; }
+.bnp-save {
+  width: 100%; padding: 9px; background: #7b88d4; color: #fff;
+  border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.bnp-save:hover { background: #6a78c8; }
+
+/* ─── Log bar ──────────────────────────────────────────────── */
+.log-bar {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  background: rgba(255,255,255,0.94);
+  backdrop-filter: blur(10px);
+  border-top: 1px solid #e5e5ea;
+  padding: 7px 20px;
+  font-size: 12px;
+  color: #8e8e93;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  z-index: 99;
+}
 </style>
 </head>
 <body>
 
-<div class="header">
-  <div class="ws-indicator" id="wsIndicator"></div>
-  <h1>MassMO Controller</h1>
-</div>
+<!-- SVG defs -->
+<svg style="display:none" width="0" height="0">
+  <defs>
+    <linearGradient id="mmGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#fb923c"/>
+      <stop offset="100%" stop-color="#f97316"/>
+    </linearGradient>
+  </defs>
+</svg>
 
-<div class="controls">
-  <div class="field">
-    <label>GoLogin Folder UUID (token hash)</label>
-    <input type="text" id="tokenHash" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" style="min-width:340px">
+
+<!-- ─── Add Profile Modal ───────────────────────────────────── -->
+<div class="add-modal-overlay" id="addProfileModal" onclick="if(event.target===this)closeAddModal()">
+  <div class="add-modal">
+    <div>
+      <h3>Добавить профили</h3>
+    </div>
+    <div class="pgp-wrap">
+      <div class="pgp-grid" id="pgpGrid" onmouseleave="pgpHover(-1,-1)"></div>
+      <div class="pgp-count" id="pgpCount">Наведите для выбора</div>
+      <div class="pgp-progress-bar" id="pgpProgressBar">
+        <div class="pgp-progress-fill" id="pgpProgressFill" style="width:0%"></div>
+      </div>
+    </div>
+    <div class="add-modal-err" id="addModalErr"></div>
+    <div class="add-modal-btns">
+      <button class="add-modal-cancel-btn" id="addModalCancelBtn" onclick="closeAddModal()">Отмена</button>
+      <button class="add-modal-submit" id="pgpOpenBtn" onclick="pgpLaunchSelected()" disabled>Открыть</button>
+    </div>
   </div>
-  <div class="field">
-    <label>Профилей</label>
-    <input type="number" id="profileCount" value="3" min="1" max="15" style="min-width:70px">
+</div>
+
+<!-- ─── Bank Picker Modal ───────────────────────────────────── -->
+<div class="bank-modal-overlay" id="bankModal">
+  <div class="bank-modal">
+    <div class="bank-modal-head">
+      <h3>Банк для оплаты</h3>
+      <p>Выберите банк для оплаты заявки</p>
+    </div>
+    <div class="bank-search-wrap">
+      <input class="bank-search" id="bankSearch" type="text" placeholder="Поиск" oninput="filterBanks()">
+    </div>
+    <div class="bank-list" id="bankList"></div>
+    <button class="bank-modal-cancel" onclick="closeBankModal()">Отмена</button>
   </div>
-  <button class="btn-primary" id="btnStart" onclick="startSession()">Запустить</button>
-  <button class="btn-danger" id="btnStop" onclick="stopSession()" disabled>Стоп</button>
 </div>
 
-<div class="grid" id="grid">
-  <div class="empty-state" id="emptyState">Введите Folder UUID и нажмите «Запустить»</div>
+<!-- ─── Main App ────────────────────────────────────────────── -->
+<div class="navbar">
+  <div class="navbar-brand">
+    <svg width="26" height="26" viewBox="0 0 28 28" fill="none">
+      <circle cx="14" cy="14" r="14" fill="url(#mmGrad)"/>
+      <path d="M6 11 Q9 7.5 12 11 Q15 14.5 18 11 Q21 7.5 24 11" stroke="white" stroke-width="2.3" fill="none" stroke-linecap="round"/>
+      <path d="M6 16.5 Q9 13 12 16.5 Q15 20 18 16.5 Q21 13 24 16.5" stroke="white" stroke-width="2.3" fill="none" stroke-linecap="round"/>
+    </svg>
+    MassMO Controller
+  </div>
+  <div class="navbar-tabs">
+    <button class="tab-btn active" onclick="switchView('main')">Мониторинг</button>
+    <button class="tab-btn" onclick="switchView('profiles')">Профили / Лимиты</button>
+  </div>
+  <div class="navbar-right">
+    <div class="nav-load-status" id="navLoadStatus">
+      <div class="nav-load-dot"></div>
+      <span id="navLoadText"></span>
+      <div class="nav-load-bar"><div class="nav-load-fill" id="navLoadFill" style="width:0%"></div></div>
+    </div>
+    <div class="ws-dot" id="wsDot"></div>
+    <span class="ws-label" id="wsLabel">Отключён</span>
+
+    <!-- Bulk limits popover -->
+    <div class="bulk-nav-wrap" id="bulkNavWrap">
+      <button class="btn-nav" style="background:#f2f2f7;color:#1c1c1e;padding:6px 11px" onclick="toggleBulkNav(event)" title="Лимиты для всех профилей">Лимиты ▾</button>
+      <div class="bulk-nav-popover" id="bulkNavPopover">
+        <div class="bnp-title">Лимиты для всех профилей</div>
+        <div class="bnp-row">
+          <div class="bnp-field">
+            <label>МИН</label>
+            <input type="number" id="navGlobalMin" placeholder="0" min="0">
+          </div>
+          <div class="bnp-field">
+            <label>МАКС</label>
+            <input type="number" id="navGlobalMax" placeholder="0" min="0">
+          </div>
+        </div>
+        <button class="bnp-save" onclick="applyNavLimitsToAll()">Сохранить для всех</button>
+      </div>
+    </div>
+
+    <!-- Hide inactive toggle -->
+    <button class="btn-nav-icon btn-hide-inactive" id="btnHideInactive" onclick="toggleHideInactive()" title="Скрыть неактивные окна">
+      <svg id="eyeIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M1 12S5 4 12 4s11 8 11 8-4 8-11 8S1 12 1 12z"/>
+        <circle cx="12" cy="12" r="3"/>
+      </svg>
+    </button>
+
+    <!-- Search all toggle -->
+    <button class="btn-nav btn-search-all-combined" id="btnSearchAll" onclick="toggleSearchAll()" title="Запустить поиск на всех окнах" disabled>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0">
+        <circle cx="11" cy="11" r="7"/>
+        <path d="M16.5 16.5l4 4"/>
+      </svg>
+      <span id="btnSearchAllLabel">Запустить все</span>
+    </button>
+  </div>
 </div>
 
-<div class="log" id="log">Готов</div>
+<div class="offline-banner" id="offlineBanner">⚠ Соединение потеряно — попытка переподключения…</div>
+
+<!-- View: Main -->
+<div class="view active" id="view-main">
+  <div class="grid" id="grid">
+    <div class="empty-state" id="emptyState"></div>
+  </div>
+</div>
+
+<!-- View: Profiles -->
+<div class="view" id="view-profiles">
+  <div class="profiles-wrap">
+    <h2>Профили — лимиты выплат</h2>
+    <div class="bulk-limits-bar">
+      <span class="blb-label">Применить ко всем:</span>
+      <span class="blb-label">МИН</span>
+      <input type="number" id="globalMin" placeholder="0" min="0">
+      <span class="blb-label">МАКС</span>
+      <input type="number" id="globalMax" placeholder="0" min="0">
+      <button onclick="applyLimitsToAll()">Сохранить для всех</button>
+    </div>
+    <div class="profiles-grid" id="profilesGrid">
+      <div style="color:#c7c7cc;font-size:14px;padding:40px 0">Нет активных профилей</div>
+    </div>
+  </div>
+</div>
+
+<div class="log-bar" id="log">Готов</div>
 
 <script>
 const API = '';
 let ws = null;
 let windowStates = {};
+let wsConnected = false;
 
-// ---- WebSocket ----
+// ─── Add Profile Modal (drag grid picker) ────────────────────
+const PGP_ALL = Array.from({length: 15}, (_, i) => `M${i+1}`);
+let _availableLabels = [];
+let _pgpDragging = false;
+let _pgpDragStart = -1;
+let _pgpSelected = new Set(); // indices into PGP_ALL
+
+async function openAddModal() {
+  _pgpSelected.clear();
+  _pgpDragging = false;
+  _pgpDragStart = -1;
+  document.getElementById('addModalErr').textContent = '';
+  document.getElementById('pgpProgressBar').style.display = 'none';
+  document.getElementById('pgpProgressFill').style.width = '0%';
+  document.getElementById('addModalCancelBtn').disabled = false;
+  document.getElementById('addModalCancelBtn').textContent = 'Отмена';
+  document.getElementById('pgpCount').textContent = '';
+  document.getElementById('addProfileModal').classList.add('open');
+
+  try {
+    const data = await api('GET', '/api/v1/windows/available');
+    _availableLabels = data.labels || [];
+  } catch(e) {
+    _availableLabels = [];
+  }
+
+  if (!_availableLabels.length) {
+    document.getElementById('addModalErr').textContent = 'Нет доступных профилей. Запустите смену через Telegram.';
+  }
+  pgpRender();
+  pgpUpdateOpenBtn();
+}
+
+function closeAddModal() {
+  document.getElementById('addProfileModal').classList.remove('open');
+}
+
+// ─── Grid Picker ──────────────────────────────────────────────
+function pgpRender() {
+  const activeSet = new Set(Object.values(windowStates).map(w => w.label));
+  const availSet = new Set(_availableLabels);
+  const grid = document.getElementById('pgpGrid');
+  let html = '';
+  PGP_ALL.forEach((label, idx) => {
+    const isActive = activeSet.has(label);
+    const isAvail = availSet.has(label);
+    const isSel = _pgpSelected.has(idx);
+    let cls = 'pgp-cell';
+    if (isActive) cls += ' pgp-active';
+    else if (isAvail) { cls += ' pgp-avail'; if (isSel) cls += ' pgp-selected'; }
+    else cls += ' pgp-disabled';
+    html += `<div class="${cls}" data-idx="${idx}" data-avail="${isAvail ? '1' : '0'}"></div>`;
+  });
+  grid.innerHTML = html;
+}
+
+function pgpExtendTo(endIdx) {
+  const availSet = new Set(_availableLabels);
+  const start = Math.min(_pgpDragStart, endIdx);
+  const end = Math.max(_pgpDragStart, endIdx);
+  _pgpSelected.clear();
+  for (let i = start; i <= end; i++) {
+    if (availSet.has(PGP_ALL[i])) _pgpSelected.add(i);
+  }
+  document.querySelectorAll('#pgpGrid .pgp-cell[data-avail="1"]').forEach(cell => {
+    cell.classList.toggle('pgp-selected', _pgpSelected.has(+cell.dataset.idx));
+  });
+  pgpUpdateOpenBtn();
+}
+
+function pgpUpdateOpenBtn() {
+  const n = _pgpSelected.size;
+  const btn = document.getElementById('pgpOpenBtn');
+  if (!btn) return;
+  btn.disabled = n === 0;
+  btn.textContent = 'Открыть';
+  document.getElementById('pgpCount').textContent = '';
+}
+
+function pluralRu(n, one, few, many) {
+  const t = n % 100, d = n % 10;
+  if (t >= 11 && t <= 19) return many;
+  if (d === 1) return one;
+  if (d >= 2 && d <= 4) return few;
+  return many;
+}
+
+async function pgpLaunchSelected() {
+  const labels = [..._pgpSelected].sort((a, b) => a - b)
+    .map(idx => PGP_ALL[idx])
+    .filter(l => _availableLabels.includes(l));
+  if (!labels.length) return;
+  await pgpLaunchSequential(labels);
+}
+
+function showNavLoad(label, current, total) {
+  document.getElementById('navLoadStatus').classList.add('visible');
+  document.getElementById('navLoadText').textContent = `${label} (${current}/${total})`;
+  document.getElementById('navLoadFill').style.width = `${((current - 1) / total) * 100}%`;
+}
+
+function hideNavLoad() {
+  document.getElementById('navLoadStatus').classList.remove('visible');
+}
+
+async function checkLoadingState() {
+  try {
+    const d = await api('GET', '/api/v1/loading');
+    if (d && d.label) showNavLoad(d.label, d.current, d.total);
+  } catch(e) {}
+}
+
+async function pgpLaunchSequential(labels) {
+  closeAddModal();
+
+  const status = document.getElementById('navLoadStatus');
+  const text = document.getElementById('navLoadText');
+  const fill = document.getElementById('navLoadFill');
+  status.classList.add('visible');
+  fill.style.width = '0%';
+
+  let done = 0;
+  const total = labels.length;
+  const failed = [];
+
+  for (const label of labels) {
+    text.textContent = `${label} (${done + 1}/${total})`;
+    fill.style.width = `${(done / total) * 100}%`;
+    try {
+      const controller = new AbortController();
+      const t = setTimeout(() => controller.abort(), 65000);
+      const res = await fetch('/api/v1/windows/add', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ label }),
+        signal: controller.signal,
+      });
+      clearTimeout(t);
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({ detail: res.statusText }));
+        throw new Error(e.detail || res.statusText);
+      }
+      const w = await res.json();
+      windowStates[w.window_id] = w;
+      renderAll();
+      syncProfileChip(w);
+      log(`[${label}] Подключено`);
+    } catch(e) {
+      failed.push(label);
+      log(`[${label}] Ошибка: ${e.name === 'AbortError' ? 'Таймаут' : e.message}`);
+    }
+    done++;
+  }
+
+  fill.style.width = '100%';
+  if (failed.length) {
+    text.textContent = `Не удалось: ${failed.join(', ')}`;
+    setTimeout(() => status.classList.remove('visible'), 5000);
+  } else {
+    status.classList.remove('visible');
+  }
+  log(`Добавлено: ${done - failed.length}/${total}`);
+}
+
+// ─── Per-card auth (legacy) ───────────────────────────────────
+async function connectCard(label) {
+  const input = document.getElementById('cinput-' + label);
+  const btn = document.getElementById('cbtn-' + label);
+  const err = document.getElementById('cerr-' + label);
+  const secret = input ? input.value.trim() : '';
+  if (!secret) { if (err) err.textContent = 'Введите токен'; return; }
+
+  btn.disabled = true;
+  if (err) err.textContent = '';
+  log(`[${label}] Подключение…`);
+
+  try {
+    const res = await api('POST', '/api/v1/session/connect', {
+      profiles: [{ label, secret }]
+    });
+    res.forEach(w => { windowStates[w.window_id] = w; renderCard(w); syncProfileChip(w); });
+    log(`[${label}] Подключено`);
+  } catch(e) {
+    if (err) err.textContent = e.message || 'Ошибка';
+    btn.disabled = false;
+    log(`[${label}] Ошибка: ${e.message}`);
+  }
+}
+
+
+// ─── View switching ───────────────────────────────────────────
+function switchView(name) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('view-' + name).classList.add('active');
+  document.querySelectorAll('.tab-btn').forEach((b, i) => {
+    b.classList.toggle('active', (i === 0 && name === 'main') || (i === 1 && name === 'profiles'));
+  });
+  if (name === 'profiles') renderProfiles();
+}
+
+// ─── WebSocket ────────────────────────────────────────────────
 function connectWS() {
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
   ws = new WebSocket(`${proto}//${location.host}/ws`);
-  ws.onopen = () => { setWSStatus('connected'); log('WS connected'); };
-  ws.onclose = () => { setWSStatus(''); log('WS disconnected, retrying…'); setTimeout(connectWS, 3000); };
-  ws.onerror = () => { setWSStatus('error'); };
+  ws.onopen = () => {
+    wsConnected = true;
+    setWSStatus('connected');
+    document.getElementById('offlineBanner').classList.remove('visible');
+    log('WS connected');
+    checkLoadingState();
+  };
+  ws.onclose = () => {
+    wsConnected = false;
+    setWSStatus('');
+    document.getElementById('offlineBanner').classList.add('visible');
+    setTimeout(connectWS, 3000);
+    setTimeout(fetchStateREST, 500);
+  };
+  ws.onerror = () => setWSStatus('error');
   ws.onmessage = (e) => {
     const data = JSON.parse(e.data);
+    if (data.event === 'ping') return;
     if (data.event === 'window_update' && data.window) {
-      windowStates[data.window.window_id] = data.window;
-      renderCard(data.window);
+      const prev = windowStates[data.window.window_id];
+      const w = data.window;
+      // Sound + browser notification on new ACTIVE_PAYOUT
+      if (prev?.status !== 'ACTIVE_PAYOUT' && w.status === 'ACTIVE_PAYOUT') {
+        triggerBrowserNotification(w);
+        playPayoutSound();
+      }
+      // Auto-next: start 5s countdown when entering PAID, cancel on leaving
+      if (w.status === 'PAID' && prev?.status !== 'PAID') {
+        startAutoNext(w.window_id);
+      } else if (w.status !== 'PAID') {
+        cancelAutoNext(w.window_id);
+      }
+      windowStates[w.window_id] = w;
+      renderCard(w);
+      syncProfileChip(w);
+      startCountdowns();
+    } else if (data.event === 'window_removed' && data.window_id) {
+      delete windowStates[data.window_id];
+      cancelAutoNext(data.window_id);
+      document.getElementById('card-' + data.window_id)?.remove();
+      renderProfiles();
     } else if (data.event === 'state_snapshot' && data.windows) {
+      Object.keys(_autoNextTimers).forEach(cancelAutoNext);
+      windowStates = {};
       data.windows.forEach(w => { windowStates[w.window_id] = w; });
       renderAll();
+      renderProfiles();
+      startCountdowns();
+    } else if (data.event === 'loading_progress') {
+      showNavLoad(data.label, data.current, data.total);
+    } else if (data.event === 'loading_done') {
+      hideNavLoad();
     }
   };
-  // Ping every 20s to keep alive
   setInterval(() => { if (ws && ws.readyState === 1) ws.send('ping'); }, 20000);
 }
 
-function setWSStatus(cls) {
-  const el = document.getElementById('wsIndicator');
-  el.className = 'ws-indicator ' + cls;
-}
-
-// ---- Session ----
-async function startSession() {
-  const tokenHash = document.getElementById('tokenHash').value.trim();
-  const count = parseInt(document.getElementById('profileCount').value, 10);
-  if (!tokenHash) { log('Введите Folder UUID'); return; }
-  document.getElementById('btnStart').disabled = true;
-  log(`Запуск сессии: ${count} профилей…`);
+async function fetchStateREST() {
+  if (wsConnected) return;
   try {
-    const res = await api('POST', '/api/v1/session/start', { token_hash: tokenHash, profile_count: count });
+    const windows = await api('GET', '/api/v1/windows');
     windowStates = {};
-    res.forEach(w => { windowStates[w.window_id] = w; });
+    windows.forEach(w => { windowStates[w.window_id] = w; });
     renderAll();
-    document.getElementById('btnStop').disabled = false;
-    log(`Запущено ${res.length} окон`);
-  } catch(e) {
-    log(`Ошибка: ${e.message}`);
-    document.getElementById('btnStart').disabled = false;
-  }
+    renderProfiles();
+    startCountdowns();
+  } catch(e) {}
 }
 
-async function stopSession() {
-  document.getElementById('btnStop').disabled = true;
-  await api('POST', '/api/v1/session/stop');
-  windowStates = {};
-  renderAll();
-  document.getElementById('btnStart').disabled = false;
-  log('Сессия остановлена');
+function setWSStatus(cls) {
+  document.getElementById('wsDot').className = 'ws-dot ' + (cls || '');
+  document.getElementById('wsLabel').textContent =
+    cls === 'connected' ? 'Подключён' : cls === 'error' ? 'Ошибка' : 'Отключён';
 }
 
-// ---- Render ----
+// ─── Render ───────────────────────────────────────────────────
+const ALL_LABELS = Array.from({length: 15}, (_, i) => `M${i+1}`);
+
 function renderAll() {
-  const ids = Object.keys(windowStates);
-  if (ids.length === 0) {
-    document.getElementById('grid').innerHTML = '<div class="empty-state" id="emptyState">Введите Folder UUID и нажмите «Запустить»</div>';
-    return;
-  }
-  document.getElementById('grid').innerHTML = '';
-  ids.forEach(id => renderCard(windowStates[id]));
+  const grid = document.getElementById('grid');
+  grid.innerHTML = '';
+  const sorted = Object.values(windowStates).sort((a, b) => {
+    const na = parseInt(a.label.replace(/\D/g, ''), 10) || 0;
+    const nb = parseInt(b.label.replace(/\D/g, ''), 10) || 0;
+    return na - nb;
+  });
+  sorted.forEach(w => renderCard(w));
+  grid.insertAdjacentHTML('beforeend',
+    `<div class="add-profile-card" onclick="openAddModal()">
+       <div class="add-profile-icon">+</div>
+       <div class="add-profile-lbl">Добавить профиль</div>
+     </div>`);
+  updateSearchBtn();
+  applyCardFilter();
+}
+
+function buildAuthCard(label) {
+  return `<div class="mm-card" id="card-${label}">
+  <div class="mm-card-head">
+    <button class="card-reload-btn" style="visibility:hidden">${RELOAD_ICON}</button>
+    <span class="mm-profile-lbl">${label}</span>
+    <button class="card-remove-btn" style="visibility:hidden">✕</button>
+  </div>
+  <div class="mm-state-body">
+    <div class="card-auth">
+      <div class="card-auth-title">Авторизация</div>
+      <div class="card-auth-sub">Введите токен для входа</div>
+      <div class="card-auth-input-wrap">
+        <span class="card-auth-icon">@</span>
+        <input class="card-auth-input" id="cinput-${label}" type="text" placeholder="Secret token" autocomplete="off"
+               onkeydown="if(event.key==='Enter') connectCard('${label}')">
+      </div>
+      <button class="card-auth-btn" id="cbtn-${label}" onclick="connectCard('${label}')">Авторизоваться</button>
+      <div class="card-auth-error" id="cerr-${label}"></div>
+    </div>
+  </div>
+</div>`;
 }
 
 function renderCard(w) {
   const existing = document.getElementById('card-' + w.window_id);
-  const html = buildCard(w);
   if (existing) {
-    existing.outerHTML = html;
-  } else {
-    const emptyState = document.getElementById('emptyState');
-    if (emptyState) emptyState.remove();
-    document.getElementById('grid').insertAdjacentHTML('beforeend', html);
+    const limMin = existing.querySelector('.lim-min');
+    const limMax = existing.querySelector('.lim-max');
+    if (limMin) limMin.textContent = w.min_limit != null ? fmt(w.min_limit) + ' RUB' : '— RUB';
+    if (limMax) limMax.textContent = w.max_limit != null ? fmt(w.max_limit) + ' RUB' : '— RUB';
+    const stateEl = existing.querySelector('.mm-state-body');
+    if (stateEl) stateEl.innerHTML = buildStateBody(w);
+    const infoEl = existing.querySelector('.mm-info-section-wrap');
+    if (infoEl) infoEl.innerHTML = buildInfoSection(w);
+    const errEl = existing.querySelector('.mm-error-bar-wrap');
+    if (errEl) errEl.innerHTML = w.error_msg ? `<div class="mm-error-bar">⚠ ${esc(w.error_msg)}</div>` : '';
+    const ctrlEl = existing.querySelector('.mm-controls-wrap');
+    if (ctrlEl) ctrlEl.innerHTML = buildControls(w);
+    const minIn = document.getElementById('lim-min-in-' + w.window_id);
+    const maxIn = document.getElementById('lim-max-in-' + w.window_id);
+    if (minIn && document.activeElement !== minIn) minIn.value = w.min_limit != null ? w.min_limit : '';
+    if (maxIn && document.activeElement !== maxIn) maxIn.value = w.max_limit != null ? w.max_limit : '';
+    // Apply hide filter and refresh search button
+    if (hideInactive && !ACTIVE_STATUSES.has(w.status)) existing.style.display = 'none';
+    else existing.style.display = '';
+    updateSearchBtn();
+    return;
   }
+  // Insert new card in sorted position (before the "+" add card)
+  const addCard = document.querySelector('.add-profile-card');
+  if (addCard) addCard.insertAdjacentHTML('beforebegin', buildCard(w));
+  else document.getElementById('grid').insertAdjacentHTML('beforeend', buildCard(w));
+  // Apply hide-inactive filter to newly inserted card
+  const newCard = document.getElementById('card-' + w.window_id);
+  if (newCard && hideInactive && !ACTIVE_STATUSES.has(w.status)) newCard.style.display = 'none';
+  updateSearchBtn();
 }
+
+// ─── Card HTML builders ───────────────────────────────────────
+const LOGO = `<svg width="18" height="18" viewBox="0 0 28 28" fill="none">
+  <circle cx="14" cy="14" r="14" fill="url(#mmGrad)"/>
+  <path d="M6 11 Q9 7.5 12 11 Q15 14.5 18 11 Q21 7.5 24 11" stroke="white" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <path d="M6 16.5 Q9 13 12 16.5 Q15 20 18 16.5 Q21 13 24 16.5" stroke="white" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+</svg>`;
+
+function fmt(n) { return n != null ? Number(n).toLocaleString('ru-RU') : '—'; }
+function esc(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+const RELOAD_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>`;
 
 function buildCard(w) {
-  const p = w.payout || {};
-  const isActive = w.status === 'ACTIVE_PAYOUT';
-  const isIdle = w.status === 'IDLE';
+  return `<div class="mm-card" id="card-${w.window_id}">
+  <div class="mm-card-head">
+    <button class="card-reload-btn" id="reload-${w.window_id}" onclick="reloadCard('${w.window_id}')" title="Обновить">${RELOAD_ICON}</button>
+    <span class="mm-profile-lbl">${w.label}</span>
+    <button class="card-remove-btn" onclick="removeWindow('${w.window_id}')" title="Отключить профиль">✕</button>
+  </div>
+  <div class="mm-limits-bar">
+    <div class="mm-lim-card">
+      <div class="mm-lim-title">МИН. сумма выплаты</div>
+      <div class="mm-lim-val">
+        ${svgLimMin()}
+        <span class="lim-min">${w.min_limit != null ? fmt(w.min_limit) + ' RUB' : '— RUB'}</span>
+      </div>
+    </div>
+    <div class="mm-lim-card">
+      <div class="mm-lim-title">МАКС. сумма выплаты</div>
+      <div class="mm-lim-val">
+        ${svgLimMax()}
+        <span class="lim-max">${w.max_limit != null ? fmt(w.max_limit) + ' RUB' : '— RUB'}</span>
+      </div>
+    </div>
+  </div>
+  <div class="mm-error-bar-wrap">${w.error_msg ? `<div class="mm-error-bar">⚠ ${esc(w.error_msg)}</div>` : ''}</div>
+  <div class="mm-state-body">${buildStateBody(w)}</div>
+  <div class="mm-info-section-wrap">${buildInfoSection(w)}</div>
+  <div class="mm-controls-wrap">${buildControls(w)}</div>
+</div>`;
+}
 
-  let payoutHtml = '';
-  if (isActive && p.amount) {
-    payoutHtml = `<div class="payout-info">
-      <div class="amount">${p.amount}</div>
-      ${p.bank ? `<div><span class="label-row">Банк</span> ${p.bank}</div>` : ''}
-      ${p.recipient ? `<div><span class="label-row">Получатель</span> ${p.recipient}</div>` : ''}
-      ${p.timer ? `<div><span class="label-row">Истекает</span> ${p.timer}</div>` : ''}
-      ${p.rate ? `<div><span class="label-row">Курс</span> ${p.rate} USDT/RUB</div>` : ''}
+function buildStateBody(w) {
+  const id = w.window_id;
+  switch (w.status) {
+    case 'CONNECTING':
+      return `<div class="state-icon-wrap ic-connect"><div class="spinner sp-gray"></div></div>
+              <div class="state-title">Подключение...</div>
+              <div class="state-sub">Авторизация в MassMO API…</div>`;
+
+    case 'IDLE':
+      return `<div class="state-icon-wrap ic-idle">${svgX('#3b82f6')}</div>
+              <div class="state-title">У вас нет активной заявки<br>на выплату</div>
+              <div class="state-sub">Нажмите «Получить выплату»,<br>для запроса новой заявки</div>
+              <button class="mm-act-btn mm-btn-blue" onclick="cmd('${id}','REQUEST_PAYOUT',{})">Получить выплату</button>`;
+
+    case 'SEARCHING':
+      return `<div class="state-icon-wrap ic-search"><div class="spinner sp-orange"></div></div>
+              <div class="state-title">Поиск выплаты</div>
+              <div class="state-sub">Идет поиск новой заявки...</div>
+              <button class="mm-act-btn mm-btn-red" onclick="cmd('${id}','CANCEL_PAYOUT',{})">Отменить поиск</button>`;
+
+    case 'ACTIVE_PAYOUT': {
+      const p = w.payout || {};
+      const deadline = p.timer ? parseDeadline(p.timer) : null;
+      return `<div class="state-icon-wrap ic-payout">${svgClock('#f97316')}</div>
+              <div class="state-title">Заявка ожидает оплаты</div>
+              ${p.amount ? `<div class="state-sub" style="font-size:20px;font-weight:700;color:#f97316;margin-bottom:4px">${esc(p.amount)}</div>` : ''}
+              ${deadline ? `<div class="state-sub" style="margin-bottom:4px">Истекает: <span data-deadline="${esc(deadline)}" style="font-weight:600;color:#ef4444">--:--</span></div>` : p.timer ? `<div class="state-sub" style="margin-bottom:4px">Истекает: ${esc(p.timer)}</div>` : ''}
+              <button class="mm-act-btn mm-btn-red" style="margin-top:6px" onclick="cmd('${id}','CANCEL_PAYOUT',{})">Отменить</button>`;
+    }
+
+    case 'VERIFICATION':
+      return `<div class="state-icon-wrap ic-verification"><div class="spinner sp-orange"></div></div>
+              <div class="state-title">Проверка чека</div>
+              <div class="state-sub">Ожидайте проверки...</div>`;
+
+    case 'VERIFICATION_FAILED': {
+      const p = w.payout || {};
+      const deadline = p.timer ? parseDeadline(p.timer) : null;
+      return `<div class="state-icon-wrap ic-verif-failed">${svgX('#ef4444')}</div>
+              <div class="state-title">Платёж не прошел проверку</div>
+              <div class="state-sub">Проверьте корректность чека<br>и реквизиты получателя</div>
+              ${p.amount ? `<div class="state-sub" style="font-size:18px;font-weight:700;color:#f97316;margin-top:4px">${esc(p.amount)}</div>` : ''}
+              ${deadline ? `<div class="state-sub" style="margin-bottom:4px">Истекает: <span data-deadline="${esc(deadline)}" style="font-weight:600;color:#ef4444">--:--</span></div>` : p.timer ? `<div class="state-sub" style="margin-bottom:4px">Истекает: ${esc(p.timer)}</div>` : ''}
+              <button class="mm-act-btn mm-btn-red" style="margin-top:6px" onclick="cmd('${id}','CANCEL_PAYOUT',{})">Отменить</button>`;
+    }
+
+    case 'PAID': {
+      const autoNext = _autoNextTimers[id];
+      const countdownHtml = autoNext
+        ? `<div class="auto-next-bar">Новый поиск через <span class="anb-timer" id="auto-next-${id}">${autoNext.remaining}</span>с<button class="anb-cancel" onclick="cancelAutoNext('${id}')" title="Отмена">✕</button></div>`
+        : '';
+      return `<div class="state-icon-wrap ic-paid">${svgCheck('#22c55e')}</div>
+              <div class="state-title">Заявка оплачена</div>
+              <div class="state-sub">Платеж прошел проверку</div>
+              ${countdownHtml}`;
+    }
+
+    case 'DISABLED':
+      return `<div class="state-icon-wrap ic-disabled">${svgLock('#a78bfa')}</div>
+              <div class="state-title">Выплатчик отключён</div>
+              <div class="state-sub">Payouter is disabled</div>
+              <button class="mm-act-btn mm-btn-blue" style="margin-top:12px" onclick="cmd('${id}','TOGGLE_SETTING',{setting:'executor',enabled:true})">Включить выплатчик</button>`;
+
+    case 'ERROR':
+      return `<div class="state-icon-wrap ic-error">${svgWarn('#ef4444')}</div>
+              <div class="state-title">Ошибка соединения</div>
+              <div class="state-sub">Переподключение...</div>
+              `;
+
+    case 'STOPPED':
+      return `<div class="state-icon-wrap ic-stopped">${svgStop('#aeaeb2')}</div>
+              <div class="state-title">Остановлен</div>
+              <div class="state-sub"></div>`;
+
+    default:
+      return `<div class="state-title">${esc(w.status)}</div>`;
+  }
+}
+
+function buildInfoSection(w) {
+  const id = w.window_id;
+  if ((w.status === 'ACTIVE_PAYOUT' || w.status === 'VERIFICATION_FAILED') && w.payout) {
+    const p = w.payout;
+    const senderBank = p.sender_bank || null;
+    const senderBankInfo = senderBank ? bankMap[senderBank] : null;
+    const senderLabel = senderBankInfo ? senderBankInfo.name : (senderBank || 'Не выбран');
+    const senderLogo = senderBankInfo ? `<img src="${esc(senderBankInfo.logo)}" onerror="this.style.display='none'">` : `<svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="2" y="7" width="20" height="14" rx="2" stroke="#8e8e93" stroke-width="1.8"/><path d="M2 10h20" stroke="#8e8e93" stroke-width="1.8"/></svg>`;
+    return `<div class="mm-info-section">
+      ${p.bank ? `<div class="mm-bank-block">
+        <div class="mm-bank-name">${esc(p.bank)}</div>
+        ${p.recipient ? `<div class="mm-bank-phone">${esc(p.recipient)}</div>` : ''}
+      </div>` : ''}
+      <div class="mm-section-lbl">3. Выберите банк, с которого оплатили</div>
+      <div class="bank-selector-row" onclick="openBankModal('${id}')">
+        <div class="bank-selector-left">${senderLogo}<span>${esc(senderLabel)}</span></div>
+        <span class="bank-selector-choose">Выбрать ▾</span>
+      </div>
+      ${p.rate ? `<div class="mm-info-row"><span class="mm-ir-label">Курс (USDT/RUB)</span><span class="mm-ir-value">${esc(p.rate)}</span></div>` : ''}
     </div>`;
   }
-
-  let errorHtml = w.error_msg ? `<div class="error-msg">⚠ ${escHtml(w.error_msg)}</div>` : '';
-
-  let actionsHtml = `<div class="actions">`;
-  if (isIdle) {
-    actionsHtml += `<button class="btn-primary btn-sm" onclick="cmd('${w.window_id}','REQUEST_PAYOUT',{})">Получить выплату</button>`;
+  if (w.status === 'PAID') {
+    const p = w.payout || {};
+    return `<div class="mm-info-section">
+      ${p.amount ? `<div class="mm-info-row"><span class="mm-ir-label">Сумма выплаты</span><span class="mm-ir-value big">${esc(p.amount)}</span></div>` : ''}
+      ${p.bank ? `<div class="mm-bank-block">
+        <div class="mm-bank-name">${esc(p.bank)}</div>
+        ${p.recipient ? `<div class="mm-bank-phone">${esc(p.recipient)}</div>` : ''}
+      </div>` : ''}
+      <div class="mm-next-btn" onclick="cmd('${id}','REQUEST_PAYOUT',{})">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 5l7 7-7 7" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Перейти к новой заявке
+      </div>
+      ${p.rate ? `<div class="mm-section-lbl">Дополнительная информация</div>
+        <div class="mm-info-row"><span class="mm-ir-label">Курс выплаты (USDT/RUB)</span><span class="mm-ir-value">${esc(p.rate)}</span></div>` : ''}
+    </div>`;
   }
-  if (isActive) {
-    actionsHtml += `<button class="btn-danger btn-sm" onclick="cmd('${w.window_id}','CANCEL_PAYOUT',{})">Отменить</button>`;
-  }
-  actionsHtml += `<button class="btn-sm" style="background:#2a2a3a" onclick="cmd('${w.window_id}','REFRESH_STATE',{})">↻ Обновить</button>`;
-  actionsHtml += `</div>`;
-
-  let banksHtml = isActive ? `<div class="section-title">Банк</div><div class="banks">
-    <button class="btn-bank tinkoff btn-sm" onclick="cmd('${w.window_id}','SELECT_BANK',{bank:'tinkoff'})">T</button>
-    <button class="btn-bank sber btn-sm" onclick="cmd('${w.window_id}','SELECT_BANK',{bank:'sber'})">С</button>
-    <button class="btn-bank alfa btn-sm" onclick="cmd('${w.window_id}','SELECT_BANK',{bank:'alfa'})">А</button>
-    <button class="btn-bank vtb btn-sm" onclick="cmd('${w.window_id}','SELECT_BANK',{bank:'vtb'})">ВТБ</button>
-  </div>` : '';
-
-  const minVal = w.min_limit != null ? w.min_limit : '';
-  const maxVal = w.max_limit != null ? w.max_limit : '';
-  let limitsHtml = `<div class="section-title">Лимиты (мин / макс)</div>
-  <div class="limits-row">
-    <input type="number" id="min-${w.window_id}" value="${minVal}" placeholder="${w.min_limit ?? 0}" style="width:80px">
-    <input type="number" id="max-${w.window_id}" value="${maxVal}" placeholder="${w.max_limit ?? 50000}" style="width:80px">
-    <button class="btn-sm btn-primary" onclick="saveLimits('${w.window_id}')">Сохранить</button>
-  </div>`;
-
-  let togglesHtml = `<div class="section-title">Настройки</div>
-  <div class="toggles">
-    <label class="toggle-item"><input type="checkbox" onchange="toggleSetting('${w.window_id}','phone',this.checked)" checked> Телефон</label>
-    <label class="toggle-item"><input type="checkbox" onchange="toggleSetting('${w.window_id}','card',this.checked)" checked> Карта</label>
-    <label class="toggle-item"><input type="checkbox" onchange="toggleSetting('${w.window_id}','account',this.checked)" checked> Счёт</label>
-  </div>`;
-
-  let uploadHtml = isActive ? `<div class="upload-row">
-    <input type="file" accept=".pdf" id="file-${w.window_id}">
-    <button class="btn-sm btn-primary" onclick="uploadReceipt('${w.window_id}')">Загрузить чек</button>
-  </div>` : '';
-
-  return `<div class="card" id="card-${w.window_id}">
-    <div class="card-header">
-      <span class="card-label">${w.label}</span>
-      <span class="badge ${w.status}">${STATUS_LABELS[w.status] || w.status}</span>
-    </div>
-    <div class="card-body">
-      ${errorHtml}
-      ${payoutHtml}
-      ${actionsHtml}
-      ${banksHtml}
-      ${limitsHtml}
-      ${togglesHtml}
-      ${uploadHtml}
-    </div>
-  </div>`;
+  return '';
 }
 
-const STATUS_LABELS = {
-  'CONNECTING':    'Подключение',
-  'IDLE':          'Ожидание',
-  'SEARCHING':     'Поиск выплаты',
-  'ACTIVE_PAYOUT': 'Выплата',
-  'DISABLED':      'Отключён',
-  'ERROR':         'Ошибка',
-  'STOPPED':       'Остановлен',
-};
-
-// ---- Commands ----
-async function cmd(windowId, type, params) {
-  log(`[${windowId.slice(-4)}] ${type}…`);
-  try {
-    const res = await api('POST', `/api/v1/windows/${windowId}/command`, { type, params });
-    log(`[${windowId.slice(-4)}] ${type}: ${res.success ? 'OK' : 'FAIL — ' + res.message}`);
-  } catch(e) {
-    log(`[${windowId.slice(-4)}] ${type} error: ${e.message}`);
+function buildControls(w) {
+  const id = w.window_id;
+  let h = '<div class="mm-controls">';
+  if (w.status === 'ACTIVE_PAYOUT' || w.status === 'VERIFICATION_FAILED') {
+    h += `<div class="mm-ctrl-title">Чек</div>
+    <div class="drop-zone" id="drop-${id}"
+         ondragover="event.preventDefault(); document.getElementById('drop-${id}').classList.add('drag-over')"
+         ondragleave="document.getElementById('drop-${id}').classList.remove('drag-over')"
+         ondrop="handleDrop(event, '${id}')">
+      Перетащите файл сюда или
+    </div>
+    <div class="mm-upload-row">
+      <input type="file" accept=".pdf,.jpg,.jpeg,.png" id="file-${id}">
+      <button class="mm-upload-btn" onclick="uploadReceiptFromInput('${id}')">Загрузить</button>
+    </div>`;
   }
+  h += '</div>';
+  return h;
 }
 
-async function saveLimits(windowId) {
-  const minVal = parseInt(document.getElementById('min-' + windowId).value, 10);
-  const maxVal = parseInt(document.getElementById('max-' + windowId).value, 10);
+// ─── Profiles view ────────────────────────────────────────────
+function renderProfiles() {
+  const grid = document.getElementById('profilesGrid');
+  const ids = Object.keys(windowStates);
+  if (!ids.length) {
+    grid.innerHTML = '<div style="color:#c7c7cc;font-size:14px;padding:40px 0">Нет активных профилей</div>';
+    return;
+  }
+  const sorted = ids.map(id => windowStates[id]).sort((a, b) => {
+    const na = parseInt(a.label.replace(/\D/g,''), 10) || 0;
+    const nb = parseInt(b.label.replace(/\D/g,''), 10) || 0;
+    return na - nb;
+  });
+  grid.innerHTML = sorted.map(w => {
+    const minVal = w.min_limit != null ? w.min_limit : '';
+    const maxVal = w.max_limit != null ? w.max_limit : '';
+    return `<div class="p-chip" id="pchip-${w.window_id}">
+      <div class="p-chip-head">
+        <span class="p-chip-lbl">${w.label}</span>
+        <span class="p-badge pb-${w.status}">${STATUS_LABELS[w.status] || w.status}</span>
+      </div>
+      <div class="p-lim-inputs">
+        <span>МИН</span>
+        <input type="number" id="pmin-${w.window_id}" value="${minVal}" placeholder="0">
+        <span>МАКС</span>
+        <input type="number" id="pmax-${w.window_id}" value="${maxVal}" placeholder="0">
+      </div>
+      <button class="p-save-btn" onclick="saveProfileLimits('${w.window_id}')">Сохранить</button>
+    </div>`;
+  }).join('');
+}
+
+function syncProfileChip(w) {
+  const chip = document.getElementById('pchip-' + w.window_id);
+  if (!chip) return;
+  const badge = chip.querySelector('.p-badge');
+  if (badge) { badge.className = 'p-badge pb-' + w.status; badge.textContent = STATUS_LABELS[w.status] || w.status; }
+  const minIn = document.getElementById('pmin-' + w.window_id);
+  const maxIn = document.getElementById('pmax-' + w.window_id);
+  if (minIn && document.activeElement !== minIn) minIn.value = w.min_limit != null ? w.min_limit : '';
+  if (maxIn && document.activeElement !== maxIn) maxIn.value = w.max_limit != null ? w.max_limit : '';
+}
+
+async function saveProfileLimits(windowId) {
+  const minVal = parseInt(document.getElementById('pmin-' + windowId).value, 10);
+  const maxVal = parseInt(document.getElementById('pmax-' + windowId).value, 10);
   if (isNaN(minVal) || isNaN(maxVal)) { log('Введите мин и макс'); return; }
   await cmd(windowId, 'UPDATE_LIMITS', { min: minVal, max: maxVal });
 }
 
-async function toggleSetting(windowId, setting, enabled) {
-  await cmd(windowId, 'TOGGLE_SETTING', { setting, enabled });
+// ─── SVG Icons ────────────────────────────────────────────────
+const STATUS_LABELS = {
+  'CONNECTING':          'Подключение',
+  'IDLE':                'Ожидание',
+  'SEARCHING':           'Поиск',
+  'ACTIVE_PAYOUT':       'Выплата',
+  'VERIFICATION':        'Проверка',
+  'VERIFICATION_FAILED': 'Не прошел',
+  'PAID':                'Оплачено',
+  'DISABLED':            'Отключён',
+  'ERROR':               'Ошибка',
+  'STOPPED':             'Остановлен',
+};
+
+function svgCheck(c) {
+  return `<svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="${c}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+function svgX(c) {
+  return `<svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="${c}" stroke-width="2.5" stroke-linecap="round"/></svg>`;
+}
+function svgClock(c) {
+  return `<svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="${c}" stroke-width="2"/><path d="M12 7v5l3 3" stroke="${c}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+function svgLock(c) {
+  return `<svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="5" y="11" width="14" height="10" rx="2" stroke="${c}" stroke-width="2"/><path d="M8 11V7a4 4 0 018 0v4" stroke="${c}" stroke-width="2" stroke-linecap="round"/></svg>`;
+}
+function svgWarn(c) {
+  return `<svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M12 9v4M12 17h.01" stroke="${c}" stroke-width="2.5" stroke-linecap="round"/><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" stroke="${c}" stroke-width="2" stroke-linejoin="round"/></svg>`;
+}
+function svgStop(c) {
+  return `<svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="6" y="6" width="12" height="12" rx="2" stroke="${c}" stroke-width="2"/></svg>`;
+}
+function svgLimMin() {
+  return `<svg width="16" height="16" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="9" stroke="#ef4444" stroke-width="1.8"/><path d="M10 6v8M7 11l3 3 3-3" stroke="#ef4444" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+function svgLimMax() {
+  return `<svg width="16" height="16" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="9" stroke="#22c55e" stroke-width="1.8"/><path d="M10 14V6M7 9l3-3 3 3" stroke="#22c55e" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 }
 
-async function uploadReceipt(windowId) {
-  const input = document.getElementById('file-' + windowId);
-  if (!input || !input.files[0]) { log('Выберите файл'); return; }
-  const formData = new FormData();
-  formData.append('file', input.files[0]);
-  log(`[${windowId.slice(-4)}] Загрузка чека…`);
+// ─── Command error flash on card ──────────────────────────────
+const _cardErrTimers = {};
+function showCardError(windowId, msg) {
+  const card = document.getElementById('card-' + windowId);
+  if (!card) return;
+  const bar = card.querySelector('.mm-error-bar-wrap');
+  if (!bar) return;
+  bar.innerHTML = `<div class="mm-error-bar">⚠ ${esc(msg)}</div>`;
+  clearTimeout(_cardErrTimers[windowId]);
+  _cardErrTimers[windowId] = setTimeout(() => {
+    const b = card.querySelector('.mm-error-bar-wrap');
+    if (b) b.innerHTML = '';
+  }, 5000);
+}
+
+// ─── Commands ─────────────────────────────────────────────────
+const _OPTIMISTIC = {
+  'REQUEST_PAYOUT': w => ({ ...w, status: 'SEARCHING' }),
+  'CANCEL_PAYOUT':  w => ({ ...w, status: 'IDLE', payout: null }),
+  'TOGGLE_SETTING': (w, p) => p.setting === 'executor' && p.enabled ? { ...w, status: 'IDLE' } : w,
+};
+
+async function cmd(windowId, type, params) {
+  log(`[${windowId.slice(-4)}] ${type}…`);
+
+  // Optimistic update — мгновенно обновить карточку
+  const optimisticFn = _OPTIMISTIC[type];
+  const prev = windowStates[windowId];
+  if (optimisticFn && prev) {
+    const optimistic = optimisticFn(prev, params || {});
+    if (optimistic !== prev) {
+      windowStates[windowId] = optimistic;
+      renderCard(optimistic);
+    }
+  }
+
   try {
-    const res = await fetch(`/api/v1/windows/${windowId}/upload`, { method: 'POST', body: formData });
-    const data = await res.json();
-    log(`[${windowId.slice(-4)}] Upload: ${data.success ? 'OK' : 'FAIL — ' + data.message}`);
+    const res = await api('POST', `/api/v1/windows/${windowId}/command`, { type, params });
+    log(`[${windowId.slice(-4)}] ${type}: ${res.success ? 'OK' : 'FAIL — ' + res.message}`);
+    if (!res.success) {
+      if (prev) { windowStates[windowId] = prev; renderCard(prev); }
+      showCardError(windowId, res.message);
+    }
   } catch(e) {
-    log(`[${windowId.slice(-4)}] Upload error: ${e.message}`);
+    log(`[${windowId.slice(-4)}] ${type} error: ${e.message}`);
+    if (prev) { windowStates[windowId] = prev; renderCard(prev); }
+    showCardError(windowId, e.message);
   }
 }
 
-// ---- Helpers ----
+async function uploadReceiptFromInput(windowId) {
+  const input = document.getElementById('file-' + windowId);
+  if (!input || !input.files[0]) { log('Выберите файл'); return; }
+  await uploadReceiptFile(windowId, input.files[0]);
+}
+
+async function uploadReceiptFile(windowId, file) {
+  const formData = new FormData();
+  formData.append('file', file);
+  log(`[${windowId}] Загрузка чека: ${file.name}…`);
+  try {
+    const res = await fetch(`/api/v1/windows/${windowId}/upload`, { method: 'POST', body: formData });
+    const data = await res.json();
+    log(`[${windowId}] Upload: ${data.success ? 'OK' : 'FAIL — ' + data.message}`);
+  } catch(e) {
+    log(`[${windowId}] Upload error: ${e.message}`);
+  }
+}
+
+function handleDrop(event, windowId) {
+  event.preventDefault();
+  const dropEl = document.getElementById('drop-' + windowId);
+  if (dropEl) dropEl.classList.remove('drag-over');
+  const file = event.dataTransfer.files[0];
+  if (file) uploadReceiptFile(windowId, file);
+}
+
+// ─── Helpers ──────────────────────────────────────────────────
 async function api(method, path, body) {
   const opts = { method, headers: {} };
   if (body) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
@@ -316,29 +1783,328 @@ async function api(method, path, body) {
   return res.json();
 }
 
-function escHtml(s) {
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
-
 function log(msg) {
   const el = document.getElementById('log');
-  const time = new Date().toLocaleTimeString('ru-RU', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
-  el.textContent = `[${time}] ${msg}`;
+  const t = new Date().toLocaleTimeString('ru-RU', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  el.textContent = `[${t}] ${msg}`;
 }
 
-// ---- On load ----
-connectWS();
+// ─── Bank Picker ──────────────────────────────────────────────
+let bankList = [];      // [{alias, name, logo}]
+let bankMap = {};       // alias → {name, logo}
+let _bankModalTarget = null;  // windowId
 
-// Fetch initial state
+async function loadBanks() {
+  try {
+    bankList = await api('GET', '/api/v1/banks');
+    bankMap = {};
+    bankList.forEach(b => { bankMap[b.alias] = b; });
+    log(`Загружено ${bankList.length} банков`);
+  } catch(e) {
+    log('Банки не загружены: ' + e.message);
+  }
+}
+
+function openBankModal(windowId) {
+  _bankModalTarget = windowId;
+  document.getElementById('bankSearch').value = '';
+  filterBanks();
+  document.getElementById('bankModal').classList.add('open');
+  setTimeout(() => document.getElementById('bankSearch').focus(), 100);
+}
+
+function closeBankModal() {
+  document.getElementById('bankModal').classList.remove('open');
+  _bankModalTarget = null;
+}
+
+function filterBanks() {
+  const q = document.getElementById('bankSearch').value.toLowerCase();
+  const filtered = q ? bankList.filter(b => b.name.toLowerCase().includes(q) || b.alias.toLowerCase().includes(q)) : bankList;
+  const currentBank = _bankModalTarget && windowStates[_bankModalTarget]?.payout?.sender_bank;
+  document.getElementById('bankList').innerHTML = filtered.map(b => `
+    <div class="bank-item ${b.alias === currentBank ? 'selected' : ''}" onclick="selectBank('${esc(b.alias)}')">
+      <img src="${esc(b.logo)}" alt="" onerror="this.style.display='none'">
+      <span>${esc(b.name)}</span>
+    </div>
+  `).join('');
+}
+
+async function selectBank(alias) {
+  if (!_bankModalTarget) return;
+  const windowId = _bankModalTarget;
+  closeBankModal();
+  log(`[${windowId}] Выбран банк: ${alias}`);
+  await cmd(windowId, 'SELECT_SENDER_BANK', { bank_alias: alias });
+}
+
+// Close modal on overlay click
+document.addEventListener('click', e => {
+  const overlay = document.getElementById('bankModal');
+  if (e.target === overlay) closeBankModal();
+});
+
+// ─── Countdown timers ─────────────────────────────────────────
+let _timerInterval = null;
+
+function parseDeadline(timer) {
+  if (!timer) return null;
+  // Try ISO / RFC2822 first
+  const d = new Date(timer);
+  if (!isNaN(d)) return d.toISOString();
+  // Russian format: "14.03.2026 13:03"
+  const m = timer.match(/(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}):(\d{2})/);
+  if (m) return new Date(parseInt(m[3]), parseInt(m[2]) - 1, parseInt(m[1]), parseInt(m[4]), parseInt(m[5])).toISOString();
+  return null;
+}
+
+function startCountdowns() {
+  if (_timerInterval) clearInterval(_timerInterval);
+  _timerInterval = setInterval(() => {
+    document.querySelectorAll('[data-deadline]').forEach(el => {
+      const deadline = new Date(el.dataset.deadline);
+      const diff = Math.max(0, deadline - Date.now());
+      const mm = String(Math.floor(diff / 60000)).padStart(2, '0');
+      const ss = String(Math.floor((diff % 60000) / 1000)).padStart(2, '0');
+      el.textContent = diff > 0 ? `${mm}:${ss}` : '00:00';
+    });
+  }, 1000);
+}
+
+// ─── Browser Notifications ────────────────────────────────────
+if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+  Notification.requestPermission();
+}
+
+function triggerBrowserNotification(w) {
+  if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+  const p = w.payout || {};
+  const body = [p.amount, p.bank].filter(Boolean).join(' • ') || 'Новая выплата';
+  try {
+    new Notification(`💰 ${w.label}`, { body });
+  } catch(e) {}
+}
+
+// ─── Auto-next after PAID ─────────────────────────────────────
+const _autoNextTimers = {};    // windowId → {intervalId, remaining}
+const AUTO_NEXT_DELAY = 5;     // seconds
+
+function startAutoNext(windowId) {
+  cancelAutoNext(windowId);
+  let remaining = AUTO_NEXT_DELAY;
+  const intervalId = setInterval(() => {
+    remaining--;
+    const t = _autoNextTimers[windowId];
+    if (t) t.remaining = remaining;
+    const el = document.getElementById('auto-next-' + windowId);
+    if (el) el.textContent = remaining;
+    if (remaining <= 0) {
+      cancelAutoNext(windowId);
+      const w = windowStates[windowId];
+      if (w && w.status === 'PAID') cmd(windowId, 'REQUEST_PAYOUT', {});
+    }
+  }, 1000);
+  _autoNextTimers[windowId] = { intervalId, remaining };
+  // Re-render state body to show countdown
+  const w = windowStates[windowId];
+  if (w) {
+    const card = document.getElementById('card-' + windowId);
+    if (card) { const sb = card.querySelector('.mm-state-body'); if (sb) sb.innerHTML = buildStateBody(w); }
+  }
+}
+
+function cancelAutoNext(windowId) {
+  const t = _autoNextTimers[windowId];
+  if (!t) return;
+  clearInterval(t.intervalId);
+  delete _autoNextTimers[windowId];
+  // Re-render state body to remove countdown
+  const w = windowStates[windowId];
+  if (w) {
+    const card = document.getElementById('card-' + windowId);
+    if (card) { const sb = card.querySelector('.mm-state-body'); if (sb) sb.innerHTML = buildStateBody(w); }
+  }
+}
+
+// ─── Sound alert ──────────────────────────────────────────────
+function playPayoutSound() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    [[880, 0, 0.08], [660, 0.12, 0.08], [880, 0.24, 0.15]].forEach(([freq, start, dur]) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.3, ctx.currentTime + start);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + dur);
+      osc.start(ctx.currentTime + start);
+      osc.stop(ctx.currentTime + start + dur + 0.01);
+    });
+  } catch(e) {}
+}
+
+// ─── Remove individual agent ──────────────────────────────────
+async function reloadCard(windowId) {
+  const btn = document.getElementById('reload-' + windowId);
+  if (btn) btn.classList.add('spinning');
+  try {
+    await cmd(windowId, 'REFRESH_STATE', {});
+  } finally {
+    setTimeout(() => { if (btn) btn.classList.remove('spinning'); }, 600);
+  }
+}
+
+async function removeWindow(windowId) {
+  const w = windowStates[windowId];
+  const label = w ? w.label : windowId;
+  if (!confirm(`Отключить ${label}?\nПрофиль будет остановлен.`)) return;
+  try {
+    await api('DELETE', `/api/v1/windows/${windowId}`);
+    delete windowStates[windowId];
+    cancelAutoNext(windowId);
+    renderAll();
+    renderProfiles();
+    log(`[${label}] Профиль отключён`);
+  } catch(e) {
+    log(`[${label}] Ошибка отключения: ${e.message}`);
+  }
+}
+
+// ─── Bulk limits ──────────────────────────────────────────────
+async function applyLimitsToAll() {
+  const min = parseInt(document.getElementById('globalMin').value, 10);
+  const max = parseInt(document.getElementById('globalMax').value, 10);
+  if (isNaN(min) || isNaN(max) || min < 0 || max < min) {
+    log('Введите корректные МИН и МАКС лимиты');
+    return;
+  }
+  const ids = Object.keys(windowStates);
+  if (!ids.length) { log('Нет активных профилей'); return; }
+  await Promise.all(ids.map(id => cmd(id, 'UPDATE_LIMITS', { min, max })));
+  log(`Лимиты ${min.toLocaleString('ru-RU')}–${max.toLocaleString('ru-RU')} применены ко всем профилям`);
+}
+
+// ─── Hide inactive ────────────────────────────────────────────
+let hideInactive = false;
+const ACTIVE_STATUSES = new Set(['ACTIVE_PAYOUT', 'VERIFICATION', 'VERIFICATION_FAILED', 'PAID']);
+
+function applyCardFilter() {
+  Object.values(windowStates).forEach(w => {
+    const card = document.getElementById('card-' + w.window_id);
+    if (!card) return;
+    card.style.display = (hideInactive && !ACTIVE_STATUSES.has(w.status)) ? 'none' : '';
+  });
+}
+
+function toggleHideInactive() {
+  hideInactive = !hideInactive;
+  const btn = document.getElementById('btnHideInactive');
+  btn.classList.toggle('active', hideInactive);
+  btn.title = hideInactive ? 'Показать все окна' : 'Скрыть неактивные окна';
+  const icon = document.getElementById('eyeIcon');
+  if (icon) {
+    icon.innerHTML = hideInactive
+      ? `<path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07A3 3 0 1115.17 15M1 1l22 22"/>`
+      : `<path d="M1 12S5 4 12 4s11 8 11 8-4 8-11 8S1 12 1 12z"/><circle cx="12" cy="12" r="3"/>`;
+  }
+  applyCardFilter();
+}
+
+// ─── Search all button ────────────────────────────────────────
+function updateSearchBtn() {
+  const btn = document.getElementById('btnSearchAll');
+  if (!btn) return;
+  const states = Object.values(windowStates).map(w => w.status);
+  const searchingCount = states.filter(s => s === 'SEARCHING').length;
+  const idleCount = states.filter(s => s === 'IDLE').length;
+
+  const label = document.getElementById('btnSearchAllLabel');
+  if (searchingCount > 0) {
+    btn.classList.add('searching');
+    btn.title = 'Остановить поиск на всех окнах';
+    btn.disabled = false;
+    if (label) label.textContent = 'Остановить все';
+  } else {
+    btn.classList.remove('searching');
+    btn.title = 'Запустить поиск на всех окнах';
+    btn.disabled = idleCount === 0;
+    if (label) label.textContent = 'Запустить все';
+  }
+}
+
+async function toggleSearchAll() {
+  const states = Object.values(windowStates);
+  const searching = states.filter(w => w.status === 'SEARCHING');
+  const idle = states.filter(w => w.status === 'IDLE');
+  if (searching.length > 0) {
+    await Promise.all(searching.map(w => cmd(w.window_id, 'CANCEL_PAYOUT', {})));
+  } else if (idle.length > 0) {
+    await Promise.all(idle.map(w => cmd(w.window_id, 'REQUEST_PAYOUT', {})));
+  }
+}
+
+// ─── Bulk limits nav popover ──────────────────────────────────
+function toggleBulkNav(e) {
+  e.stopPropagation();
+  document.getElementById('bulkNavPopover').classList.toggle('open');
+}
+
+document.addEventListener('click', e => {
+  const wrap = document.getElementById('bulkNavWrap');
+  if (wrap && !wrap.contains(e.target)) {
+    document.getElementById('bulkNavPopover')?.classList.remove('open');
+  }
+});
+
+async function applyNavLimitsToAll() {
+  const min = parseInt(document.getElementById('navGlobalMin').value, 10);
+  const max = parseInt(document.getElementById('navGlobalMax').value, 10);
+  if (isNaN(min) || isNaN(max) || min < 0 || max < min) {
+    log('Введите корректные МИН и МАКС лимиты');
+    return;
+  }
+  const ids = Object.keys(windowStates);
+  if (!ids.length) { log('Нет активных профилей'); return; }
+  await Promise.all(ids.map(id => cmd(id, 'UPDATE_LIMITS', { min, max })));
+  document.getElementById('bulkNavPopover').classList.remove('open');
+  // Sync profiles view inputs
+  document.getElementById('globalMin').value = min;
+  document.getElementById('globalMax').value = max;
+  log(`Лимиты ${min.toLocaleString('ru-RU')}–${max.toLocaleString('ru-RU')} применены ко всем`);
+}
+
+// ─── Grid Picker drag events (bound once) ─────────────────────
+document.getElementById('pgpGrid').addEventListener('mousedown', (e) => {
+  e.preventDefault();
+  const cell = e.target.closest('.pgp-avail');
+  if (!cell) return;
+  _pgpDragging = true;
+  _pgpDragStart = +cell.dataset.idx;
+  _pgpSelected.clear();
+  pgpExtendTo(+cell.dataset.idx);
+});
+
+document.getElementById('pgpGrid').addEventListener('mousemove', (e) => {
+  if (!_pgpDragging) return;
+  const cell = e.target.closest('.pgp-cell');
+  if (!cell) return;
+  pgpExtendTo(+cell.dataset.idx);
+});
+
+document.addEventListener('mouseup', () => { _pgpDragging = false; });
+
+// ─── Init ──────────────────────────────────────────────────────
+connectWS();
+renderAll();
+loadBanks();
 (async () => {
   try {
     const windows = await api('GET', '/api/v1/windows');
-    if (windows.length > 0) {
-      windows.forEach(w => { windowStates[w.window_id] = w; });
-      renderAll();
-      document.getElementById('btnStop').disabled = false;
-    }
-  } catch(e) { /* not critical */ }
+    windows.forEach(w => { windowStates[w.window_id] = w; });
+    renderAll();
+    renderProfiles();
+    startCountdowns();
+  } catch(e) {}
 })();
 </script>
 </body>

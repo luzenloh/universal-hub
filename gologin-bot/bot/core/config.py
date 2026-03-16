@@ -1,3 +1,4 @@
+from __future__ import annotations
 from pydantic_settings import BaseSettings
 
 
@@ -8,6 +9,7 @@ class Settings(BaseSettings):
     gologin_api_token: str = ""
     web_host: str = "127.0.0.1"
     web_port: int = 8080
+    gologin_local_url: str = "http://localhost:36912"
 
     class Config:
         env_file = ".env"
