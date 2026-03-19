@@ -92,6 +92,44 @@ async def cmd_profiles(message: Message, session: AsyncSession) -> None:
     await message.answer("\n\n".join(lines), parse_mode="HTML")
 
 
+@router.message(Command("set_secrets"))
+async def cmd_set_secrets(message: Message, session: AsyncSession) -> None:
+    """
+    Usage: /set_secrets <folder_id> <secret1> <secret2> ... <secretN>
+    Stores MassMO API secrets for profiles M1...MN of a folder.
+    """
+    if not _admin_only(message):
+        return
+
+    parts = (message.text or "").split()
+    if len(parts) < 3:
+        await message.answer(
+            "Использование: /set_secrets &lt;folder_id&gt; &lt;secret1&gt; &lt;secret2&gt; ...\n\n"
+            "Пример: /set_secrets 3 abc123 def456 ...\n"
+            "folder_id можно узнать командой /folders",
+            parse_mode="HTML",
+        )
+        return
+
+    try:
+        folder_id = int(parts[1])
+    except ValueError:
+        await message.answer("❌ folder_id должен быть числом.", parse_mode="HTML")
+        return
+
+    secrets = parts[2:]
+
+    repo = FolderRepository(session)
+    ok = await repo.set_massmo_secrets(folder_id, secrets)
+    if ok:
+        await message.answer(
+            f"✅ Сохранено <b>{len(secrets)}</b> секретов для папки <b>{folder_id}</b>.",
+            parse_mode="HTML",
+        )
+    else:
+        await message.answer(f"❌ Папка с id={folder_id} не найдена.", parse_mode="HTML")
+
+
 @router.message(Command("setproxy"))
 async def cmd_setproxy(message: Message, session: AsyncSession) -> None:
     """Usage: /setproxy М1 http://user:pass@host:port"""

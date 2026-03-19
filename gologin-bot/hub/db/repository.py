@@ -1,11 +1,11 @@
 import json
 import logging
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from hub.db.models import Agent, Folder
+from hub.db.models import Agent, Folder, Schedule, User
 
 logger = logging.getLogger(__name__)
 
@@ -220,3 +220,70 @@ class AgentRepository:
             .values(assigned_folder_id=None, notify_chat_id=None)
         )
         await self.session.commit()
+
+
+class UserRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def upsert(self, telegram_id: int, username: str | None, first_name: str | None) -> None:
+        result = await self.session.execute(select(User).where(User.telegram_id == telegram_id))
+        user = result.scalar_one_or_none()
+        if user:
+            user.username = username
+            user.first_name = first_name
+        else:
+            self.session.add(User(telegram_id=telegram_id, username=username, first_name=first_name))
+        await self.session.commit()
+
+
+class ScheduleRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def upsert(
+        self,
+        telegram_id: int,
+        display_name: str | None,
+        week_start: date,
+        days: dict,
+    ) -> None:
+        result = await self.session.execute(
+            select(Schedule).where(
+                Schedule.telegram_id == telegram_id,
+                Schedule.week_start == week_start,
+            )
+        )
+        schedule = result.scalar_one_or_none()
+        days_json = json.dumps(days, ensure_ascii=False)
+        if schedule:
+            schedule.days = days_json
+            schedule.display_name = display_name
+            schedule.submitted_at = datetime.utcnow()
+        else:
+            self.session.add(
+                Schedule(
+                    telegram_id=telegram_id,
+                    display_name=display_name,
+                    week_start=week_start,
+                    days=days_json,
+                )
+            )
+        await self.session.commit()
+
+    async def get(self, telegram_id: int, week_start: date) -> Schedule | None:
+        result = await self.session.execute(
+            select(Schedule).where(
+                Schedule.telegram_id == telegram_id,
+                Schedule.week_start == week_start,
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def get_team(self, week_start: date) -> list[Schedule]:
+        result = await self.session.execute(
+            select(Schedule)
+            .where(Schedule.week_start == week_start)
+            .order_by(Schedule.submitted_at)
+        )
+        return list(result.scalars().all())

@@ -115,6 +115,17 @@ class FolderRepository:
         await self.session.commit()
         return result.rowcount > 0
 
+    async def set_massmo_secrets(self, folder_id: int, secrets: list[str]) -> bool:
+        """Store MassMO secrets for a folder. Returns True if folder was found."""
+        result = await self.session.execute(
+            update(Folder)
+            .where(Folder.id == folder_id)
+            .values(massmo_secrets=json.dumps(secrets))
+            .returning(Folder.id)
+        )
+        await self.session.commit()
+        return result.fetchone() is not None
+
     async def upsert_folder(
         self,
         gologin_id: str,

@@ -34,6 +34,10 @@ class Folder(Base):
     # JSON list of GoLogin profile IDs for numbered profiles M1...M15 (sorted)
     numbered_profile_ids: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     profile_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # MassMO API secrets — JSON list parallel to numbered_profile_ids
+    # secrets[i] → secret for numbered_profile_ids[i]
+    massmo_secrets: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+
     # Occupation state
     is_free: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     assigned_to: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -43,3 +47,7 @@ class Folder(Base):
     @property
     def numbered_ids(self) -> list[str]:
         return json.loads(self.numbered_profile_ids)
+
+    @property
+    def massmo_secrets_list(self) -> list[str]:
+        return json.loads(self.massmo_secrets)

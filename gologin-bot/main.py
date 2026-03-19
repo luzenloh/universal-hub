@@ -1,3 +1,5 @@
+# DEPRECATED — Phase 1 monolith entry point (bot + dashboard in one process).
+# Phase 2: use hub_main.py (Hub) + agent_main.py (Local Agent) instead.
 import asyncio
 import html
 import logging
@@ -26,7 +28,7 @@ async def main() -> None:
 
     # Create shared ws_manager and orchestrator singleton (used by both bot and web panel)
     ws_manager = WebSocketManager()
-    init_orchestrator(async_session_factory, ws_manager)
+    init_orchestrator(ws_manager)
 
     bot = Bot(token=settings.bot_token)
     dp = Dispatcher()
