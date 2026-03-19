@@ -31,6 +31,7 @@ function Install-Agent {
 
 # ── Config ────────────────────────────────────────────────────────────────────
 $GITHUB_REPO  = "luzenloh/universal-hub"
+$GITHUB_SUBDIR = "gologin-bot"
 $INSTALL_DIR  = "$env:APPDATA\gologin-agent"
 $TASK_NAME    = "MassMO-GoLogin-Agent"
 $LOG_FILE     = "$env:TEMP\gologin-agent.log"
@@ -132,6 +133,7 @@ function Main {
     New-Item -ItemType Directory -Force -Path $INSTALL_DIR | Out-Null
 
     $ReleaseUrl = "https://github.com/$GITHUB_REPO/releases/latest/download/agent.zip"
+    $RawBase = "https://raw.githubusercontent.com/$GITHUB_REPO/main/$GITHUB_SUBDIR"
     $ZipPath = "$env:TEMP\agent.zip"
 
     $Downloaded = $false

@@ -21,6 +21,7 @@ set -euo pipefail
 
 # ── Config ────────────────────────────────────────────────────────────────────
 GITHUB_REPO="luzenloh/universal-hub"
+GITHUB_SUBDIR="gologin-bot"   # subdirectory within the repo
 INSTALL_DIR="${HOME}/.gologin-agent"
 SERVICE_NAME="gologin-agent"
 LOG_FILE="/tmp/gologin-agent.log"
@@ -113,6 +114,7 @@ info "Downloading latest agent release..."
 mkdir -p "$INSTALL_DIR"
 
 RELEASE_URL="https://github.com/${GITHUB_REPO}/releases/latest/download/agent.tar.gz"
+RAW_BASE="https://raw.githubusercontent.com/${GITHUB_REPO}/main/${GITHUB_SUBDIR}"
 
 if curl -fsSL "$RELEASE_URL" -o /tmp/agent.tar.gz 2>/dev/null; then
     tar xzf /tmp/agent.tar.gz -C "$INSTALL_DIR" --strip-components=1

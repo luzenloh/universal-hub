@@ -17,6 +17,7 @@
 set -euo pipefail
 
 GITHUB_REPO="luzenloh/universal-hub"
+GITHUB_SUBDIR="gologin-bot"
 INSTALL_DIR="${HOME}/gologin-hub"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'
@@ -78,7 +79,7 @@ info "Downloading Hub files..."
 mkdir -p "$INSTALL_DIR"
 cd "$INSTALL_DIR"
 
-BASE_URL="https://raw.githubusercontent.com/${GITHUB_REPO}/main"
+BASE_URL="https://raw.githubusercontent.com/${GITHUB_REPO}/main/${GITHUB_SUBDIR}"
 
 # Try GitHub first, fall back to local copy
 download_or_copy() {
