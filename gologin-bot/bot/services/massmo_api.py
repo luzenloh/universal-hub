@@ -236,6 +236,7 @@ class MassmoClient:
             timer=_first("expired_at", "expires_at", "deadline"),
             rate=_first("rate", "exchange_rate", "course"),
             sender_bank=sender_bank,
+            order_id=_first("id", "order_id"),
         )
 
     # ------------------------------------------------------------------ payout actions
@@ -287,6 +288,18 @@ class MassmoClient:
             if r.status_code not in (200, 201, 204):
                 logger.warning("[%s] dequeue: unexpected %d — body: %s",
                                self.label, r.status_code, r.text[:300])
+
+    async def extend_order(self) -> None:
+        """Extend active payout order by 30 minutes. POST /payout_orders/{id}/prolong"""
+        order_id = self._active_order_id
+        if order_id is None:
+            raise RuntimeError(f"[{self.label}] No active order to extend")
+        r = await self._post(f"payout_orders/{order_id}/prolong")
+        if r.status_code not in (200, 201, 204):
+            logger.warning("[%s] extend_order: unexpected %d — body: %s",
+                           self.label, r.status_code, r.text[:300])
+        else:
+            logger.info("[%s] Order extended by 30 minutes", self.label)
 
     async def upload_receipt(self, file_path: str) -> None:
         """Upload receipt. Endpoint: POST /payout_orders/{id}/verification, field: proofs[]"""

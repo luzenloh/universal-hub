@@ -36,6 +36,7 @@ _BURST_CMDS = frozenset({
     CommandType.UPLOAD_RECEIPT,
     CommandType.SELECT_SENDER_BANK,
     CommandType.TOGGLE_SETTING,
+    CommandType.EXTEND_ORDER,
 })
 
 
@@ -286,6 +287,11 @@ class WindowAgent:
                     cmd.params.get("setting", ""),
                     bool(cmd.params.get("enabled", True)),
                 )
+
+            elif cmd.type == CommandType.EXTEND_ORDER:
+                await self._client.extend_order()
+                await asyncio.sleep(0.5)
+                await self._poll()
 
             if cmd.type in _BURST_CMDS:
                 self._burst_until = time.time() + 10.0

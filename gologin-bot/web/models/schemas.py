@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any
+from typing import Any, Optional
 
 from pydantic import BaseModel
 
@@ -11,38 +11,45 @@ class WindowStatus(str, Enum):
     IDLE = "IDLE"
     SEARCHING = "SEARCHING"
     ACTIVE_PAYOUT = "ACTIVE_PAYOUT"
+    VERIFICATION = "VERIFICATION"          # чек загружен, ожидает проверки
+    VERIFICATION_FAILED = "VERIFICATION_FAILED"  # чек не прошёл проверку
+    PAID = "PAID"          # заявка оплачена, ожидает перехода к новой
     DISABLED = "DISABLED"
     ERROR = "ERROR"
     STOPPED = "STOPPED"
 
 
 class PayoutData(BaseModel):
-    amount: str | None = None      # "50 000 RUB"
-    bank: str | None = None        # "Tinkoff"
-    recipient: str | None = None   # phone or card number
-    timer: str | None = None       # "14.03.2026 13:03"
-    rate: str | None = None        # "81,74"
+    amount: Optional[str] = None      # "50 000 RUB"
+    bank: Optional[str] = None        # "Tinkoff"  — receiver bank
+    recipient: Optional[str] = None   # phone or card number
+    timer: Optional[str] = None       # "14.03.2026 13:03"
+    rate: Optional[str] = None        # "81,74"
+    sender_bank: Optional[str] = None # operator's sender bank alias (set after payment)
+    order_id: Optional[str] = None    # MassMO payout order ID
 
 
 class WindowState(BaseModel):
     window_id: str          # GoLogin profile ID
     label: str              # "M1", "M2"...
     status: WindowStatus
-    payout: PayoutData | None = None
-    error_msg: str | None = None
+    payout: Optional[PayoutData] = None
+    error_msg: Optional[str] = None
     last_updated: float
-    min_limit: int | None = None
-    max_limit: int | None = None
+    min_limit: Optional[int] = None
+    max_limit: Optional[int] = None
 
 
 class CommandType(str, Enum):
     REQUEST_PAYOUT = "REQUEST_PAYOUT"
     UPLOAD_RECEIPT = "UPLOAD_RECEIPT"
     SELECT_BANK = "SELECT_BANK"
+    SELECT_SENDER_BANK = "SELECT_SENDER_BANK"
     CANCEL_PAYOUT = "CANCEL_PAYOUT"
     UPDATE_LIMITS = "UPDATE_LIMITS"
     TOGGLE_SETTING = "TOGGLE_SETTING"
     REFRESH_STATE = "REFRESH_STATE"
+    EXTEND_ORDER = "EXTEND_ORDER"
 
 
 class CommandRequest(BaseModel):
@@ -55,13 +62,55 @@ class StartSessionRequest(BaseModel):
     profile_count: int   # 1–15
 
 
+class ConnectEntry(BaseModel):
+    label: str           # "M1", "M2", ...
+    secret: str          # MassMO secret token
+
+
+class ConnectRequest(BaseModel):
+    profiles: list[ConnectEntry]
+
+
 class WSEvent(BaseModel):
     event: str
-    windows: list[WindowState] | None = None
-    window: WindowState | None = None
-    message: str | None = None
+    windows: Optional[list[WindowState]] = None
+    window: Optional[WindowState] = None
+    message: Optional[str] = None
 
 
 class CommandResult(BaseModel):
     success: bool
     message: str = ""
+
+
+# ── Hub ↔ Agent protocol schemas ──────────────────────────────────────────────
+
+class AgentStartRequest(BaseModel):
+    """Hub → Agent: start a shift on this agent."""
+    folder_gologin_id: str
+    folder_name: str
+    main_profile_id: str
+    numbered_profile_ids: list[str]
+    massmo_secrets: list[str]
+    count: int
+    notify_chat_id: int
+
+
+class AgentStatus(BaseModel):
+    """Agent → Hub: current session state."""
+    active: bool
+    windows: list[WindowState]
+
+
+class RegisterPayload(BaseModel):
+    """Agent → Hub: announce agent URL on startup."""
+    agent_id: str
+    public_url: str
+    local_url: str
+    owner_telegram_id: Optional[int] = None
+
+
+class HeartbeatPayload(BaseModel):
+    """Agent → Hub: periodic heartbeat with window states."""
+    agent_id: str
+    windows: list[WindowState]

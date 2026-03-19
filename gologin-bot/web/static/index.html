@@ -1489,11 +1489,16 @@ function buildStateBody(w) {
     case 'ACTIVE_PAYOUT': {
       const p = w.payout || {};
       const deadline = p.timer ? parseDeadline(p.timer) : null;
+      const shortId = p.order_id ? '#' + String(p.order_id).replace(/-/g,'').slice(0,8) + '…' + String(p.order_id).replace(/-/g,'').slice(-5) : '';
       return `<div class="state-icon-wrap ic-payout">${svgClock('#f97316')}</div>
               <div class="state-title">Заявка ожидает оплаты</div>
               ${p.amount ? `<div class="state-sub" style="font-size:20px;font-weight:700;color:#f97316;margin-bottom:4px">${esc(p.amount)}</div>` : ''}
               ${deadline ? `<div class="state-sub" style="margin-bottom:4px">Истекает: <span data-deadline="${esc(deadline)}" style="font-weight:600;color:#ef4444">--:--</span></div>` : p.timer ? `<div class="state-sub" style="margin-bottom:4px">Истекает: ${esc(p.timer)}</div>` : ''}
-              <button class="mm-act-btn mm-btn-red" style="margin-top:6px" onclick="cmd('${id}','CANCEL_PAYOUT',{})">Отменить</button>`;
+              ${shortId ? `<div class="state-sub" style="font-size:11px;color:#8e8e93;margin-bottom:4px">ID выплаты: ${esc(shortId)}</div>` : ''}
+              <div style="display:flex;gap:6px;margin-top:6px;width:100%">
+                <button class="mm-act-btn mm-btn-blue" style="flex:1" onclick="cmd('${id}','EXTEND_ORDER',{})">⏱ Продлить</button>
+                <button class="mm-act-btn mm-btn-red" style="flex:1" onclick="cmd('${id}','CANCEL_PAYOUT',{})">Отменить</button>
+              </div>`;
     }
 
     case 'VERIFICATION':
@@ -1568,8 +1573,10 @@ function buildInfoSection(w) {
   }
   if (w.status === 'PAID') {
     const p = w.payout || {};
+    const shortId = p.order_id ? '#' + String(p.order_id).replace(/-/g,'').slice(0,8) + '…' + String(p.order_id).replace(/-/g,'').slice(-5) : '';
     return `<div class="mm-info-section">
       ${p.amount ? `<div class="mm-info-row"><span class="mm-ir-label">Сумма выплаты</span><span class="mm-ir-value big">${esc(p.amount)}</span></div>` : ''}
+      ${shortId ? `<div class="mm-info-row"><span class="mm-ir-label">ID выплаты</span><span class="mm-ir-value" style="font-size:12px;color:#636366">${esc(shortId)}</span></div>` : ''}
       ${p.bank ? `<div class="mm-bank-block">
         <div class="mm-bank-name">${esc(p.bank)}</div>
         ${p.recipient ? `<div class="mm-bank-phone">${esc(p.recipient)}</div>` : ''}
