@@ -81,6 +81,8 @@ async def main() -> None:
             BotCommand(command="folders", description="[Админ] Список папок"),
             BotCommand(command="sync", description="[Админ] Синхронизировать папки GoLogin"),
             BotCommand(command="agents", description="[Админ] Список агентов"),
+            BotCommand(command="register_agent", description="[Админ] Создать токен установки агента"),
+            BotCommand(command="revoke_agent", description="[Админ] Отозвать токен агента"),
             BotCommand(command="schedule", description="Проставить смены на неделю"),
         ],
         scope=BotCommandScopeAllPrivateChats(),

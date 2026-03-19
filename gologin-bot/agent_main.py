@@ -16,6 +16,9 @@ import signal
 import time
 from pathlib import Path
 
+_VERSION_FILE = Path(__file__).parent / "VERSION"
+VERSION = _VERSION_FILE.read_text().strip() if _VERSION_FILE.exists() else "unknown"
+
 # bot.core.config requires BOT_TOKEN/ADMIN_USERNAME via pydantic-settings;
 # the Agent doesn't use these — set defaults before any bot.* imports.
 os.environ.setdefault("BOT_TOKEN", "placeholder-not-used-by-agent")
@@ -75,7 +78,32 @@ def _free_port(port: int) -> None:
         pass
 
 
+async def _check_for_update() -> None:
+    """Warn if a newer version is available on GitHub. Non-blocking."""
+    github_repo = os.environ.get("GITHUB_REPO", "")
+    if not github_repo:
+        return
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(
+                f"https://api.github.com/repos/{github_repo}/releases/latest",
+                headers={"Accept": "application/vnd.github+json"},
+            )
+            if resp.status_code != 200:
+                return
+            latest = resp.json().get("tag_name", "").lstrip("v")
+            if latest and latest != VERSION:
+                logger.warning(
+                    "New version available: %s (running %s). Run install-agent.sh to update.",
+                    latest, VERSION,
+                )
+    except Exception:
+        pass  # network unavailable — ignore
+
+
 async def main() -> None:
+    logger.info("MassMO Agent v%s", VERSION)
     local_url = f"http://{agent_settings.agent_host}:{agent_settings.agent_port}"
 
     # Init orchestrator + web app
@@ -94,6 +122,8 @@ async def main() -> None:
         keep_tunnel_alive(agent_settings.agent_port, on_new_url=_on_tunnel_url),
         name="tunnel-supervisor",
     )
+
+    asyncio.create_task(_check_for_update(), name="update-check")
 
     # Heartbeat loop
     asyncio.create_task(hub_client.heartbeat_loop(interval=10.0), name="heartbeat")

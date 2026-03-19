@@ -1,5 +1,8 @@
+import base64
+import json
 import logging
-from datetime import datetime, timezone
+import secrets
+from datetime import datetime, timedelta, timezone
 
 from aiogram import F, Router
 from aiogram.filters import Command
@@ -7,8 +10,8 @@ from aiogram.types import CallbackQuery, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from hub.core.config import ADMIN_USERNAME
-from hub.db.repository import AgentRepository, FolderRepository
+from hub.core.config import ADMIN_USERNAME, settings
+from hub.db.repository import AgentRepository, AgentSetupTokenRepository, FolderRepository, UserRepository
 
 logger = logging.getLogger(__name__)
 router = Router()
@@ -155,6 +158,127 @@ async def cb_team(callback: CallbackQuery, session: AsyncSession) -> None:
     except Exception:
         pass
     await callback.answer()
+
+
+def _hub_public_url() -> str:
+    if settings.hub_public_url:
+        return settings.hub_public_url.rstrip("/")
+    return f"http://{settings.hub_host}:{settings.hub_port}"
+
+
+def _make_setup_token(hub_url: str, jti: str) -> str:
+    payload = json.dumps({"hub_url": hub_url, "jti": jti}, separators=(",", ":"))
+    b64 = base64.urlsafe_b64encode(payload.encode()).decode().rstrip("=")
+    return f"GLAGENT_{b64}"
+
+
+@router.message(Command("register_agent"))
+async def cmd_register_agent(message: Message, session: AsyncSession) -> None:
+    """Usage: /register_agent <username_or_id> [agent_id_suffix]
+    Example: /register_agent vasya
+             /register_agent vasya mac-2
+    """
+    if not _admin_only(message):
+        return
+
+    parts = (message.text or "").split()
+    if len(parts) < 2:
+        await message.answer(
+            "<b>/register_agent</b> — создать токен установки агента\n\n"
+            "Использование:\n"
+            "  <code>/register_agent &lt;username&gt; [agent_id]</code>\n\n"
+            "Примеры:\n"
+            "  <code>/register_agent vasya</code>\n"
+            "  <code>/register_agent vasya mac-2</code>",
+            parse_mode="HTML",
+        )
+        return
+
+    target = parts[1].lstrip("@")
+    user_repo = UserRepository(session)
+
+    # Resolve user: by numeric ID or by username
+    user = None
+    if target.isdigit():
+        user = await user_repo.get_by_telegram_id(int(target))
+    else:
+        user = await user_repo.get_by_username(target)
+
+    if not user:
+        await message.answer(
+            f"❌ Пользователь <code>{target}</code> не найден.\n"
+            "Пользователь должен сначала написать /start боту.",
+            parse_mode="HTML",
+        )
+        return
+
+    # Determine agent_id
+    username_slug = (user.username or str(user.telegram_id)).lower().replace(" ", "-")
+    if len(parts) >= 3:
+        agent_id = f"agent-{parts[2]}"
+    else:
+        agent_id = f"agent-{username_slug}"
+
+    jti = secrets.token_hex(16)  # 32 hex chars = 128 bits entropy
+    expires_at = datetime.utcnow() + timedelta(days=7)
+
+    token_repo = AgentSetupTokenRepository(session)
+    await token_repo.create(jti, agent_id, user.telegram_id, expires_at)
+
+    hub_url = _hub_public_url()
+    token_str = _make_setup_token(hub_url, jti)
+
+    display_name = user.first_name or user.username or str(user.telegram_id)
+    await message.answer(
+        f"✅ Токен установки агента для <b>{display_name}</b>\n"
+        f"Агент: <code>{agent_id}</code>\n"
+        f"Действует 7 дней\n\n"
+        f"<b>Linux / macOS:</b>\n"
+        f"<pre>curl -fsSL https://raw.githubusercontent.com/luzenloh/universal-hub/main/install-agent.sh | bash -s -- {token_str}</pre>\n\n"
+        f"<b>Windows (PowerShell):</b>\n"
+        f"<pre>irm https://raw.githubusercontent.com/luzenloh/universal-hub/main/install-agent.ps1 | iex; Install-Agent '{token_str}'</pre>\n\n"
+        f"Токен: <code>{token_str}</code>",
+        parse_mode="HTML",
+    )
+
+
+@router.message(Command("revoke_agent"))
+async def cmd_revoke_agent(message: Message, session: AsyncSession) -> None:
+    """Usage: /revoke_agent <username_or_id>"""
+    if not _admin_only(message):
+        return
+
+    parts = (message.text or "").split()
+    if len(parts) < 2:
+        await message.answer(
+            "Использование: <code>/revoke_agent &lt;username_or_id&gt;</code>",
+            parse_mode="HTML",
+        )
+        return
+
+    target = parts[1].lstrip("@")
+    user_repo = UserRepository(session)
+
+    user = None
+    if target.isdigit():
+        user = await user_repo.get_by_telegram_id(int(target))
+    else:
+        user = await user_repo.get_by_username(target)
+
+    if not user:
+        await message.answer(f"❌ Пользователь <code>{target}</code> не найден.", parse_mode="HTML")
+        return
+
+    username_slug = (user.username or str(user.telegram_id)).lower().replace(" ", "-")
+    agent_id = f"agent-{username_slug}"
+    token_repo = AgentSetupTokenRepository(session)
+    revoked = await token_repo.revoke_for_agent(agent_id)
+
+    display_name = user.first_name or user.username or str(user.telegram_id)
+    await message.answer(
+        f"🚫 Отозвано токенов для <b>{display_name}</b> (агент <code>{agent_id}</code>): {revoked}",
+        parse_mode="HTML",
+    )
 
 
 @router.message(Command("set_secrets"))

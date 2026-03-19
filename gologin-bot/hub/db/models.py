@@ -4,6 +4,7 @@ from datetime import date, datetime
 from sqlalchemy import Boolean, Date, DateTime, Integer, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
+
 from hub.db.base import Base
 
 
@@ -88,3 +89,17 @@ class Agent(Base):
     session_payout_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     active_payout_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     searching_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
+class AgentSetupToken(Base):
+    """One-time setup token that lets an agent installer claim its .env.agent config."""
+    __tablename__ = "agent_setup_tokens"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    # 32-char random hex — acts as the opaque secret shared with the installer
+    jti: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
+    agent_id: Mapped[str] = mapped_column(Text, nullable=False)
+    owner_telegram_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

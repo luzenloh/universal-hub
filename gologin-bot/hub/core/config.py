@@ -9,6 +9,9 @@ class HubSettings(BaseSettings):
     hub_port: int = 8082
     database_url: str = "sqlite+aiosqlite:///./hub.db"
     gologin_api_token: str = ""
+    # Public URL agents use to reach the Hub (used in setup tokens).
+    # If empty — falls back to http://{hub_host}:{hub_port}
+    hub_public_url: str = ""
 
     class Config:
         env_file = ".env.hub"

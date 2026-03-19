@@ -9,7 +9,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from hub.core.config import settings
 from hub.db.base import async_session_factory
-from hub.db.repository import AgentRepository
+from hub.db.repository import AgentRepository, AgentSetupTokenRepository
 from web.models.schemas import HeartbeatPayload, RegisterPayload, WindowStatus
 
 logger = logging.getLogger(__name__)
@@ -161,6 +161,30 @@ async def hub_heartbeat(body: HeartbeatPayload, request: Request) -> dict[str, s
         )
 
     return {"status": "ok"}
+
+
+@router.get("/claim/{jti}")
+async def hub_claim(jti: str) -> dict:
+    """One-time endpoint called by the agent installer to claim its config.
+
+    The jti is a 32-char random hex embedded in the GLAGENT_* setup token.
+    No Bearer auth — the jti itself is the shared secret (128-bit entropy, single-use).
+    """
+    async with async_session_factory() as session:
+        repo = AgentSetupTokenRepository(session)
+        token = await repo.get_valid(jti)
+        if not token:
+            raise HTTPException(status_code=404, detail="Token not found, expired, or already used")
+        await repo.mark_used(jti)
+
+    logger.info("Setup token claimed: agent_id=%s owner=%s", token.agent_id, token.owner_telegram_id)
+    return {
+        "hub_url": settings.hub_public_url or f"http://{settings.hub_host}:{settings.hub_port}",
+        "hub_secret": settings.hub_secret,
+        "agent_id": token.agent_id,
+        "owner_telegram_id": token.owner_telegram_id,
+        "agent_port": 8081,
+    }
 
 
 @router.get("/agents", dependencies=[Depends(_verify_secret)])

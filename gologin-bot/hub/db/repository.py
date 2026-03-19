@@ -5,7 +5,7 @@ from datetime import date, datetime
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from hub.db.models import Agent, Folder, Schedule, User
+from hub.db.models import Agent, AgentSetupToken, Folder, Schedule, User
 
 logger = logging.getLogger(__name__)
 
@@ -293,6 +293,60 @@ class UserRepository:
         else:
             self.session.add(User(telegram_id=telegram_id, username=username, first_name=first_name))
         await self.session.commit()
+
+    async def get_by_username(self, username: str) -> User | None:
+        result = await self.session.execute(select(User).where(User.username == username))
+        return result.scalar_one_or_none()
+
+    async def get_by_telegram_id(self, telegram_id: int) -> User | None:
+        result = await self.session.execute(select(User).where(User.telegram_id == telegram_id))
+        return result.scalar_one_or_none()
+
+
+class AgentSetupTokenRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def create(self, jti: str, agent_id: str, owner_telegram_id: int, expires_at: datetime) -> AgentSetupToken:
+        token = AgentSetupToken(
+            jti=jti,
+            agent_id=agent_id,
+            owner_telegram_id=owner_telegram_id,
+            expires_at=expires_at,
+        )
+        self.session.add(token)
+        await self.session.commit()
+        await self.session.refresh(token)
+        return token
+
+    async def get_valid(self, jti: str) -> AgentSetupToken | None:
+        """Return token only if it exists, is unused and not expired."""
+        result = await self.session.execute(
+            select(AgentSetupToken).where(
+                AgentSetupToken.jti == jti,
+                AgentSetupToken.used_at == None,  # noqa: E711
+                AgentSetupToken.expires_at > datetime.utcnow(),
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def mark_used(self, jti: str) -> None:
+        await self.session.execute(
+            update(AgentSetupToken)
+            .where(AgentSetupToken.jti == jti)
+            .values(used_at=datetime.utcnow())
+        )
+        await self.session.commit()
+
+    async def revoke_for_agent(self, agent_id: str) -> int:
+        """Mark all unused tokens for agent_id as used. Returns count revoked."""
+        result = await self.session.execute(
+            update(AgentSetupToken)
+            .where(AgentSetupToken.agent_id == agent_id, AgentSetupToken.used_at == None)  # noqa: E711
+            .values(used_at=datetime.utcnow())
+        )
+        await self.session.commit()
+        return result.rowcount
 
 
 class ScheduleRepository:
