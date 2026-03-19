@@ -595,6 +595,18 @@ body {
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--card-border); border-radius: 3px; }
+
+/* ── Inbound block ───────────────────────────────── */
+.mm-inbound-block {
+  margin: 6px 0 0;
+  padding: 6px 10px;
+  background: rgba(99,102,241,.08);
+  border: 1px solid rgba(99,102,241,.2);
+  border-radius: 8px;
+  font-size: 11px;
+}
+.inbound-status { color: var(--text-sub); margin-bottom: 2px; }
+.inbound-platforms { color: var(--text-muted); display: flex; gap: 10px; flex-wrap: wrap; }
 </style>
 </head>
 <body>
@@ -1144,6 +1156,7 @@ function renderCard(w) {
     if (errEl) errEl.innerHTML = w.error_msg ? `<div class="mm-error-bar">⚠ ${esc(w.error_msg)}</div>` : '';
     const ctrlEl = existing.querySelector('.mm-controls-wrap');
     if (ctrlEl) ctrlEl.innerHTML = buildControls(w);
+    updateInboundBlock(w.window_id);
     const minIn = document.getElementById('lim-min-in-' + w.window_id);
     const maxIn = document.getElementById('lim-max-in-' + w.window_id);
     if (minIn && document.activeElement !== minIn) minIn.value = w.min_limit != null ? w.min_limit : '';
@@ -1209,6 +1222,7 @@ function buildCard(w) {
   </div>
   <div class="mm-error-bar-wrap">${w.error_msg ? `<div class="mm-error-bar">⚠ ${esc(w.error_msg)}</div>` : ''}</div>
   <div class="mm-state-body">${buildStateBody(w)}</div>
+  <div class="mm-inbound-wrap" id="inbound-${w.window_id}"></div>
   <div class="mm-info-section-wrap">${buildInfoSection(w)}</div>
   <div class="mm-controls-wrap">${buildControls(w)}</div>
 </div>`;
@@ -1983,6 +1997,44 @@ function _updateThemeIcon(isLight) {
   _updateThemeIcon(isLight);
 })();
 
+// ── Inbound polling ───────────────────────────────
+let inboundStates = {};  // window_id → InboundState
+
+const _INBOUND_ICONS = {
+  live: '🟡', posting: '⬜', payment_incoming: '🟠',
+  awaiting_receipt: '🟠', completed: '✅', expired: '⬛', error: '🔴', cancelled: '⬛',
+};
+
+function buildInboundHtml(ic) {
+  const icon = _INBOUND_ICONS[ic.status] || '⬜';
+  const platforms = ic.platforms.map(p => {
+    const pi = _INBOUND_ICONS[p.status] || '⬜';
+    return `<span>${pi} ${esc(p.name)}</span>`;
+  }).join('');
+  return `<div class="mm-inbound-block">
+    <div class="inbound-status">${icon} Inbound: <strong>${esc(ic.status.toUpperCase())}</strong></div>
+    ${ic.platforms.length ? `<div class="inbound-platforms">${platforms}</div>` : ''}
+  </div>`;
+}
+
+function updateInboundBlock(windowId) {
+  const el = document.getElementById('inbound-' + windowId);
+  if (!el) return;
+  const ic = inboundStates[windowId];
+  el.innerHTML = ic ? buildInboundHtml(ic) : '';
+}
+
+async function fetchInbound() {
+  try {
+    const data = await api('GET', '/api/v1/inbound');
+    inboundStates = {};
+    data.forEach(ic => { inboundStates[ic.window_id] = ic; });
+    Object.keys(windowStates).forEach(id => updateInboundBlock(id));
+  } catch(e) {}
+}
+
+setInterval(fetchInbound, 5000);
+
 // ── Init ──────────────────────────────────────────
 connectWS();
 renderAll();
@@ -1994,6 +2046,7 @@ loadBanks();
     renderAll();
     renderProfiles();
     startCountdowns();
+    await fetchInbound();
   } catch(e) {}
 })();
 </script>

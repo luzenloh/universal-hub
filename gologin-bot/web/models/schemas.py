@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 from pydantic import BaseModel
 
@@ -88,13 +88,25 @@ class CommandResult(BaseModel):
 
 # ── Hub ↔ Agent protocol schemas ──────────────────────────────────────────────
 
+class InboundPlatformState(BaseModel):
+    name: str                       # "payfast" | "montera"
+    order_id: Optional[str] = None
+    status: str                     # "posting" | "live" | "payment_incoming" | "cancelled" | "error"
+
+
+class InboundState(BaseModel):
+    window_id: str
+    status: str                     # InboundController.status value
+    platforms: list[InboundPlatformState]
+
+
 class AgentStartRequest(BaseModel):
     """Hub → Agent: start a shift on this agent."""
     folder_gologin_id: str
     folder_name: str
     main_profile_id: str
     numbered_profile_ids: list[str]
-    massmo_secrets: list[str]
+    massmo_secrets: Union[list[str], dict[str, Any]]  # list[str] legacy OR dict with payfast/montera keys
     count: int
     notify_chat_id: int
 

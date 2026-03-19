@@ -9,9 +9,10 @@ import json
 import logging
 from pathlib import Path
 
+from bot.services.inbound_controller import InboundController, InboundStatus
 from bot.services.window_agent import WindowAgent
 from bot.services.ws_manager import WebSocketManager
-from web.models.schemas import CommandRequest, CommandResult, WindowState, WindowStatus
+from web.models.schemas import CommandRequest, CommandResult, InboundState, InboundPlatformState, WindowState, WindowStatus
 
 _CACHE_FILE = Path(__file__).parent.parent.parent / "massmo_jwt_cache.json"
 
@@ -39,6 +40,27 @@ class Orchestrator:
         self._profile_map: dict[str, str] = {}  # label → GoLogin profile_id
         self._loading_progress: dict | None = None  # {"current", "total", "label"}
         self._cache_lock = asyncio.Lock()
+        self._inbound_controllers: dict[str, InboundController] = {}  # window_id → controller
+        self._shift_secrets: dict | None = None  # payfast/montera config for current shift
+
+    # ------------------------------------------------------------------ shift secrets (inbound)
+
+    def set_shift_secrets(self, secrets: dict) -> None:
+        """Store payfast/montera config for the current shift."""
+        self._shift_secrets = secrets
+        logger.info("Shift secrets set: platforms=%s", [k for k in secrets if k != "secrets"])
+
+    def get_inbound_states(self) -> list[InboundState]:
+        states: list[InboundState] = []
+        for window_id, ic in self._inbound_controllers.items():
+            states.append(InboundState(
+                window_id=window_id,
+                status=ic.status.value,
+                platforms=[
+                    InboundPlatformState(**p) for p in ic.get_platform_states()
+                ],
+            ))
+        return states
 
     # ------------------------------------------------------------------ loading UI
 
@@ -215,6 +237,12 @@ class Orchestrator:
 
     async def stop_agents(self) -> None:
         """Stop all window agents (logout from MassMO API)."""
+        # Stop inbound controllers first
+        for ic in list(self._inbound_controllers.values()):
+            asyncio.create_task(ic.stop())
+        self._inbound_controllers.clear()
+        self._shift_secrets = None
+
         if not self._agents:
             return
         for agent in list(self._agents.values()):
@@ -266,3 +294,31 @@ class Orchestrator:
             "event": "window_update",
             "window": state.model_dump(),
         })
+
+        ic = self._inbound_controllers.get(state.window_id)
+        secrets = self._shift_secrets
+
+        if state.status == WindowStatus.ACTIVE_PAYOUT and state.payout:
+            # New order or different order_id → create/replace controller
+            if secrets and ("payfast" in secrets or "montera" in secrets):
+                if ic is None or ic.payout.order_id != state.payout.order_id:
+                    if ic is not None:
+                        asyncio.create_task(ic.stop())
+                    new_ic = InboundController(state.window_id, state.payout, secrets, self)
+                    self._inbound_controllers[state.window_id] = new_ic
+                    asyncio.create_task(new_ic.start())
+
+        elif state.status == WindowStatus.EXPIRING:
+            if ic and ic.status == InboundStatus.LIVE:
+                asyncio.create_task(ic.handle_expiring())
+
+        elif state.status in {
+            WindowStatus.PAID,
+            WindowStatus.IDLE,
+            WindowStatus.STOPPED,
+            WindowStatus.ERROR,
+            WindowStatus.DISABLED,
+        }:
+            if ic:
+                asyncio.create_task(ic.stop())
+                del self._inbound_controllers[state.window_id]

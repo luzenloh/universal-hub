@@ -12,6 +12,7 @@ from web.models.schemas import (
     CommandResult,
     CommandType,
     ConnectRequest,
+    InboundState,
     WindowState,
 )
 from pydantic import BaseModel
@@ -67,6 +68,12 @@ async def get_banks(request: Request) -> list[dict]:
     except Exception as exc:
         logger.warning("Failed to fetch bank list: %s", exc)
         raise HTTPException(status_code=502, detail=str(exc))
+
+
+@router.get("/inbound", response_model=list[InboundState])
+async def get_inbound(request: Request) -> list[InboundState]:
+    """Current state of all InboundControllers (one per active ACTIVE_PAYOUT window)."""
+    return _orchestrator(request).get_inbound_states()
 
 
 @router.get("/windows", response_model=list[WindowState])
