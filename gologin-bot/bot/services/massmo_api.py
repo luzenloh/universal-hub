@@ -240,7 +240,7 @@ class MassmoClient:
             amount=_first("amount", "payout_amount", "sum"),
             bank=_first("bank_name", "bank", "bank_title"),
             recipient=_first("requisites", "card_number", "phone", "account_number"),
-            timer=_first("expire_at", "processing_until", "expires_at", "deadline"),
+            timer=_first("processing_until", "expire_at", "expires_at", "deadline"),
             rate=_first("rate", "exchange_rate", "course"),
             sender_bank=sender_bank,
             order_id=_first("uuid", "order_id"),
