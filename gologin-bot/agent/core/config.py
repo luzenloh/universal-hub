@@ -9,9 +9,9 @@ class AgentSettings(BaseSettings):
     agent_port: int = 8081                     # Agent web panel port
     agent_host: str = "127.0.0.1"
     owner_telegram_id: int = 0                 # Telegram user ID of this Mac's operator (0 = unset)
-    # Reuse GoLogin Desktop settings from bot config
     web_host: str = "127.0.0.1"
     web_port: int = 8081                       # same as agent_port
+    gologin_local_url: str = "http://localhost:36912"  # GoLogin Desktop API
 
     class Config:
         env_file = ".env.agent"

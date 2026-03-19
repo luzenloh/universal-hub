@@ -4,7 +4,7 @@ import logging
 
 import httpx
 
-from bot.core.config import settings
+from agent.core.config import settings
 
 logger = logging.getLogger(__name__)
 

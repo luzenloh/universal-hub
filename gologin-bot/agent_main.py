@@ -19,11 +19,6 @@ from pathlib import Path
 _VERSION_FILE = Path(__file__).parent / "VERSION"
 VERSION = _VERSION_FILE.read_text().strip() if _VERSION_FILE.exists() else "unknown"
 
-# bot.core.config requires BOT_TOKEN/ADMIN_USERNAME via pydantic-settings;
-# the Agent doesn't use these — set defaults before any bot.* imports.
-os.environ.setdefault("BOT_TOKEN", "placeholder-not-used-by-agent")
-os.environ.setdefault("ADMIN_USERNAME", "placeholder")
-
 import uvicorn
 
 from agent.core.config import settings as agent_settings
