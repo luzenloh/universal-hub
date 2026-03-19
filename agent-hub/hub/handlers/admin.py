@@ -234,9 +234,9 @@ async def cmd_register_agent(message: Message, session: AsyncSession) -> None:
         f"Агент: <code>{agent_id}</code>\n"
         f"Действует 7 дней\n\n"
         f"<b>Linux / macOS:</b>\n"
-        f"<pre>curl -fsSL https://raw.githubusercontent.com/luzenloh/universal-hub/main/gologin-bot/install-agent.sh | bash -s -- {token_str}</pre>\n\n"
+        f"<pre>curl -fsSL https://raw.githubusercontent.com/luzenloh/universal-hub/main/agent-hub/install-agent.sh | bash -s -- {token_str}</pre>\n\n"
         f"<b>Windows (PowerShell):</b>\n"
-        f"<pre>irm https://raw.githubusercontent.com/luzenloh/universal-hub/main/gologin-bot/install-agent.ps1 | iex; Install-Agent '{token_str}'</pre>\n\n"
+        f"<pre>irm https://raw.githubusercontent.com/luzenloh/universal-hub/main/agent-hub/install-agent.ps1 | iex; Install-Agent '{token_str}'</pre>\n\n"
         f"Токен: <code>{token_str}</code>",
         parse_mode="HTML",
     )

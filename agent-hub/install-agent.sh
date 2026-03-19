@@ -21,7 +21,7 @@ set -euo pipefail
 
 # ── Config ────────────────────────────────────────────────────────────────────
 GITHUB_REPO="luzenloh/universal-hub"
-GITHUB_SUBDIR="gologin-bot"   # subdirectory within the repo
+GITHUB_SUBDIR="agent-hub"
 INSTALL_DIR="${HOME}/.gologin-agent"
 SERVICE_NAME="gologin-agent"
 LOG_FILE="/tmp/gologin-agent.log"

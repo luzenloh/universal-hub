@@ -17,7 +17,7 @@
 set -euo pipefail
 
 GITHUB_REPO="luzenloh/universal-hub"
-GITHUB_SUBDIR="gologin-bot"
+GITHUB_SUBDIR="agent-hub"
 INSTALL_DIR="${HOME}/gologin-hub"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'

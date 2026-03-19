@@ -31,7 +31,7 @@ function Install-Agent {
 
 # ── Config ────────────────────────────────────────────────────────────────────
 $GITHUB_REPO  = "luzenloh/universal-hub"
-$GITHUB_SUBDIR = "gologin-bot"
+$GITHUB_SUBDIR = "agent-hub"
 $INSTALL_DIR  = "$env:APPDATA\gologin-agent"
 $TASK_NAME    = "MassMO-GoLogin-Agent"
 $LOG_FILE     = "$env:TEMP\gologin-agent.log"
