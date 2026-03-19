@@ -11,6 +11,7 @@ class WindowStatus(str, Enum):
     IDLE = "IDLE"
     SEARCHING = "SEARCHING"
     ACTIVE_PAYOUT = "ACTIVE_PAYOUT"
+    EXPIRING = "EXPIRING"                  # таймер истекает, доступно продление
     VERIFICATION = "VERIFICATION"          # чек загружен, ожидает проверки
     VERIFICATION_FAILED = "VERIFICATION_FAILED"  # чек не прошёл проверку
     PAID = "PAID"          # заявка оплачена, ожидает перехода к новой
@@ -23,10 +24,12 @@ class PayoutData(BaseModel):
     amount: Optional[str] = None      # "50 000 RUB"
     bank: Optional[str] = None        # "Tinkoff"  — receiver bank
     recipient: Optional[str] = None   # phone or card number
-    timer: Optional[str] = None       # "14.03.2026 13:03"
+    timer: Optional[str] = None       # "2026-03-19 15:21:13 +0300"
     rate: Optional[str] = None        # "81,74"
     sender_bank: Optional[str] = None # operator's sender bank alias (set after payment)
-    order_id: Optional[str] = None    # MassMO payout order ID
+    order_id: Optional[str] = None    # MassMO payout UUID
+    can_prolong: bool = False          # extension available right now
+    attempts_left: Optional[int] = None  # how many extensions remain
 
 
 class WindowState(BaseModel):

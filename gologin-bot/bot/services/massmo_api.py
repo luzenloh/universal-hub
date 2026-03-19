@@ -212,14 +212,17 @@ class MassmoClient:
         self._active_order_id = data.get("id")
 
         order_status_raw = (data.get("status") or data.get("state") or "").lower()
-        if "paid" in order_status_raw or "success" in order_status_raw:
+        if "paid" in order_status_raw or "success" in order_status_raw or "completed" in order_status_raw:
             win_status = WindowStatus.PAID
         elif order_status_raw == "verification":
             win_status = WindowStatus.VERIFICATION
         elif order_status_raw == "verification_failed":
             win_status = WindowStatus.VERIFICATION_FAILED
         else:
-            win_status = WindowStatus.ACTIVE_PAYOUT
+            # Check if extension is available → EXPIRING state
+            prolong_info: dict = data.get("prolong_stage_info") or {}
+            can_prolong: bool = bool(prolong_info.get("can_prolong", False))
+            win_status = WindowStatus.EXPIRING if can_prolong else WindowStatus.ACTIVE_PAYOUT
 
         def _first(*keys: str) -> str | None:
             for k in keys:
@@ -228,15 +231,21 @@ class MassmoClient:
                     return str(v)
             return None
 
+        prolong_info = data.get("prolong_stage_info") or {}
+        can_prolong = bool(prolong_info.get("can_prolong", False))
+        attempts_left: int | None = prolong_info.get("attempts_left")
+
         sender_bank = _first("sender_bank_name") or self._sender_bank_name
         return win_status, PayoutData(
             amount=_first("amount", "payout_amount", "sum"),
             bank=_first("bank_name", "bank", "bank_title"),
-            recipient=_first("card_number", "phone", "account_number", "requisite"),
-            timer=_first("expired_at", "expires_at", "deadline"),
+            recipient=_first("requisites", "card_number", "phone", "account_number"),
+            timer=_first("expire_at", "processing_until", "expires_at", "deadline"),
             rate=_first("rate", "exchange_rate", "course"),
             sender_bank=sender_bank,
-            order_id=_first("id", "order_id"),
+            order_id=_first("uuid", "order_id"),
+            can_prolong=can_prolong,
+            attempts_left=attempts_left,
         )
 
     # ------------------------------------------------------------------ payout actions

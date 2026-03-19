@@ -19,6 +19,7 @@ _POLL_INTERVALS: dict[WindowStatus, float] = {
     WindowStatus.IDLE: 15.0,
     WindowStatus.SEARCHING: 5.0,
     WindowStatus.ACTIVE_PAYOUT: 3.0,
+    WindowStatus.EXPIRING: 3.0,
     WindowStatus.VERIFICATION: 5.0,
     WindowStatus.VERIFICATION_FAILED: 10.0,
     WindowStatus.PAID: 5.0,
@@ -198,6 +199,7 @@ class WindowAgent:
     _NEEDS_ORDER_CHECK = frozenset({
         WindowStatus.CONNECTING,
         WindowStatus.ACTIVE_PAYOUT,
+        WindowStatus.EXPIRING,
         WindowStatus.VERIFICATION,
         WindowStatus.VERIFICATION_FAILED,
         WindowStatus.PAID,
