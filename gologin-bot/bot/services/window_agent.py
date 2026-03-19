@@ -280,7 +280,7 @@ class WindowAgent:
                 )
 
             elif cmd.type == CommandType.SELECT_SENDER_BANK:
-                await self._client.set_sender_bank(cmd.params.get("bank_alias", ""))
+                await self._client.set_sender_bank(cmd.params.get("bank_alias", "tinkoff"))
                 await asyncio.sleep(0.3)
                 await self._poll()
 

@@ -1,12 +1,14 @@
 """Hub shift handlers — folder selection UI → delegate launch to Agent via REST."""
 import logging
+from datetime import date, timedelta
 
 from aiogram import F, Router
 from aiogram.types import CallbackQuery
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from hub.core.config import ADMIN_USERNAME
-from hub.db.repository import AgentRepository, FolderRepository
+from hub.db.base import async_session_factory
+from hub.db.repository import AgentRepository, FolderRepository, ScheduleRepository
 from hub.keyboards.builder import (
     active_folder_keyboard,
     count_picker_keyboard,
@@ -162,8 +164,27 @@ async def shift_launch_folder(callback: CallbackQuery, session: AsyncSession) ->
     # Find the agent that belongs to this Telegram user
     agent = await agent_repo.get_agent_by_owner(user_id)
     if not agent:
+        # Auto-recover stuck session: previous shift may not have been properly released
+        stuck = await agent_repo.get_stuck_agent_by_owner(user_id)
+        if stuck:
+            logger.warning("Auto-recovering stuck agent %s for user %d", stuck.agent_id, user_id)
+            # Unpin old message if any
+            if stuck.pinned_message_id and stuck.pinned_chat_id:
+                try:
+                    await callback.bot.unpin_chat_message(stuck.pinned_chat_id, stuck.pinned_message_id)  # type: ignore[union-attr]
+                except Exception:
+                    pass
+                await agent_repo.clear_pinned_message(stuck.agent_id)
+            # Release stuck folder and agent
+            if stuck.assigned_folder_id:
+                await folder_repo.force_release_folder(stuck.assigned_folder_id)
+            await agent_repo.release_agent(stuck.agent_id)
+            # Retry lookup
+            agent = await agent_repo.get_agent_by_owner(user_id)
+
+    if not agent:
         await callback.answer(
-            "Твой агент не найден или занят. Убедись что agent_main.py запущен и OWNER_TELEGRAM_ID указан верно.",
+            "Твой агент не найден. Убедись что agent_main.py запущен и OWNER_TELEGRAM_ID указан верно.",
             show_alert=True,
         )
         return
@@ -202,8 +223,24 @@ async def shift_launch_folder(callback: CallbackQuery, session: AsyncSession) ->
         )
         return
 
+    # Schedule check — inform if today is a day off (non-blocking)
+    today = date.today()
+    this_monday = today - timedelta(days=today.weekday())
+    try:
+        async with async_session_factory() as s:
+            sched = await ScheduleRepository(s).get(user_id, this_monday)
+        today_str = today.isoformat()
+        if not sched or sched.days_dict.get(today_str, {}).get("shift") == "off":
+            await callback.answer("⚠️ По расписанию сегодня выходной.", show_alert=False)
+    except Exception:
+        pass
+
     # Link agent to folder
     await agent_repo.assign_agent_to_folder(agent.agent_id, folder_id, user_id)
+
+    # Reset session stats for this agent
+    async with async_session_factory() as s:
+        await AgentRepository(s).reset_session_stats(agent.agent_id)
 
     await callback.answer("Запускаем…")
     await callback.message.edit_text(  # type: ignore[union-attr]
@@ -223,6 +260,19 @@ async def shift_launch_folder(callback: CallbackQuery, session: AsyncSession) ->
 
     ok = await agent_client.start_shift(agent, payload)
     if ok:
+        import time as _time
+        now_str = _time.strftime("%H:%M")
+        try:
+            sent = await callback.bot.send_message(  # type: ignore[union-attr]
+                user_id,
+                f"📊 Смена активна | Папка: {folder.name}\n\nОжидание профилей...\n\nОбновлено: {now_str}",
+            )
+            await callback.bot.pin_chat_message(user_id, sent.message_id, disable_notification=True)  # type: ignore[union-attr]
+            async with async_session_factory() as s:
+                await AgentRepository(s).update_pinned_message(agent.agent_id, sent.message_id, user_id)
+        except Exception as exc:
+            logger.warning("Pin message failed: %s", exc)
+
         await callback.message.edit_text(  # type: ignore[union-attr]
             f"✅ <b>{folder.name}</b>\n"
             f"Агент запускает профили M1–M{count}…\n"
@@ -253,6 +303,17 @@ async def shift_release(callback: CallbackQuery, session: AsyncSession) -> None:
 
     agent_repo = AgentRepository(session)
     agent_id = folder.assigned_agent_id
+
+    # Unpin active message before releasing
+    if agent_id:
+        agent = await agent_repo.get_agent_by_id(agent_id)
+        if agent and agent.pinned_message_id and agent.pinned_chat_id:
+            try:
+                await callback.bot.unpin_chat_message(agent.pinned_chat_id, agent.pinned_message_id)  # type: ignore[union-attr]
+            except Exception:
+                pass
+            async with async_session_factory() as s:
+                await AgentRepository(s).clear_pinned_message(agent_id)
 
     # Release DB records first (best-effort stop on agent)
     await folder_repo.release_folder(user_id)

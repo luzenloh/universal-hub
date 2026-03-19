@@ -195,6 +195,19 @@ class AgentRepository:
         )
         return result.scalars().first()
 
+    async def get_stuck_agent_by_owner(self, owner_telegram_id: int) -> Agent | None:
+        """Return active agent that has a stuck folder assignment (previous session didn't clean up)."""
+        result = await self.session.execute(
+            select(Agent)
+            .where(
+                Agent.owner_telegram_id == owner_telegram_id,
+                Agent.is_active == True,  # noqa: E712
+                Agent.assigned_folder_id != None,  # noqa: E711
+            )
+            .order_by(Agent.last_seen.desc())
+        )
+        return result.scalars().first()
+
     async def update_heartbeat(self, agent_id: str) -> None:
         await self.session.execute(
             update(Agent)
@@ -218,6 +231,51 @@ class AgentRepository:
             update(Agent)
             .where(Agent.agent_id == agent_id)
             .values(assigned_folder_id=None, notify_chat_id=None)
+        )
+        await self.session.commit()
+
+    async def update_pinned_message(self, agent_id: str, message_id: int, chat_id: int) -> None:
+        await self.session.execute(
+            update(Agent)
+            .where(Agent.agent_id == agent_id)
+            .values(pinned_message_id=message_id, pinned_chat_id=chat_id)
+        )
+        await self.session.commit()
+
+    async def clear_pinned_message(self, agent_id: str) -> None:
+        await self.session.execute(
+            update(Agent)
+            .where(Agent.agent_id == agent_id)
+            .values(pinned_message_id=None, pinned_chat_id=None)
+        )
+        await self.session.commit()
+
+    async def update_agent_stats(
+        self, agent_id: str, active_count: int, searching_count: int, new_paid_count: int
+    ) -> None:
+        values: dict = {
+            "active_payout_count": active_count,
+            "searching_count": searching_count,
+        }
+        if new_paid_count > 0:
+            # Fetch current count to increment
+            result = await self.session.execute(
+                select(Agent).where(Agent.agent_id == agent_id)
+            )
+            agent = result.scalar_one_or_none()
+            if agent:
+                values["session_payout_count"] = (agent.session_payout_count or 0) + new_paid_count
+                values["last_payout_at"] = datetime.utcnow()
+        await self.session.execute(
+            update(Agent).where(Agent.agent_id == agent_id).values(**values)
+        )
+        await self.session.commit()
+
+    async def reset_session_stats(self, agent_id: str) -> None:
+        await self.session.execute(
+            update(Agent)
+            .where(Agent.agent_id == agent_id)
+            .values(session_payout_count=0, last_payout_at=None)
         )
         await self.session.commit()
 

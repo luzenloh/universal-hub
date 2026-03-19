@@ -355,3 +355,17 @@ async def sched_submit(callback: CallbackQuery, session: AsyncSession) -> None:
     text, kb = _build_main_view(user_id, week_start)
     await _edit(callback, text, kb)
     await callback.answer("✅ Расписание сохранено!")
+
+    # Reminder: if tomorrow is the first day of the new week and there's a shift
+    today = date.today()
+    tomorrow = today + timedelta(days=1)
+    tomorrow_str = tomorrow.isoformat()
+    if today.weekday() == 6 and tomorrow_str in draft and draft[tomorrow_str].get("shift") != "off":
+        shift_name = draft[tomorrow_str].get("shift", "")
+        try:
+            await callback.bot.send_message(  # type: ignore[union-attr]
+                user_id,
+                f"⏰ Завтра начинается твоя смена ({shift_name}). Не забудь запустить агента!",
+            )
+        except Exception:
+            pass

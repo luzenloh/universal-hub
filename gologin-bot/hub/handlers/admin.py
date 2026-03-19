@@ -1,8 +1,10 @@
 import logging
+from datetime import datetime, timezone
 
-from aiogram import Router
+from aiogram import F, Router
 from aiogram.filters import Command
-from aiogram.types import Message
+from aiogram.types import CallbackQuery, Message
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from hub.core.config import ADMIN_USERNAME
@@ -93,6 +95,66 @@ async def cmd_agents(message: Message, session: AsyncSession) -> None:
         )
 
     await message.answer("\n\n".join(lines), parse_mode="HTML")
+
+
+def _relative_time(dt: datetime | None) -> str:
+    if not dt:
+        return "—"
+    now = datetime.utcnow()
+    diff = int((now - dt).total_seconds())
+    if diff < 60:
+        return f"{diff}с назад"
+    if diff < 3600:
+        return f"{diff // 60}м назад"
+    return f"{diff // 3600}ч назад"
+
+
+async def _build_team_text(session: AsyncSession) -> str:
+    repo = AgentRepository(session)
+    agents = await repo.get_all_agents()
+    if not agents:
+        return "Нет зарегистрированных агентов."
+
+    lines = ["<b>Команда — статус агентов:</b>\n"]
+    for a in agents:
+        status = "🟢" if a.is_active else "🔴"
+        active = getattr(a, "active_payout_count", 0) or 0
+        searching = getattr(a, "searching_count", 0) or 0
+        paid = getattr(a, "session_payout_count", 0) or 0
+        last_pay = _relative_time(getattr(a, "last_payout_at", None))
+        folder = f"папка id={a.assigned_folder_id}" if a.assigned_folder_id else "свободен"
+        lines.append(
+            f"{status} <b>{a.agent_id}</b> | {folder}\n"
+            f"  🟠 Выплат: {active} активных | 🟡 {searching} поиск | ✅ {paid} за смену\n"
+            f"  Последняя выплата: {last_pay}"
+        )
+    return "\n\n".join(lines)
+
+
+@router.message(Command("team"))
+async def cmd_team(message: Message, session: AsyncSession) -> None:
+    if not _admin_only(message):
+        return
+
+    text = await _build_team_text(session)
+    builder = InlineKeyboardBuilder()
+    builder.button(text="🔄 Обновить", callback_data="admin:team")
+    await message.answer(text, parse_mode="HTML", reply_markup=builder.as_markup())
+
+
+@router.callback_query(F.data == "admin:team")
+async def cb_team(callback: CallbackQuery, session: AsyncSession) -> None:
+    if callback.from_user.username != ADMIN_USERNAME:  # type: ignore[union-attr]
+        await callback.answer("Нет прав.", show_alert=True)
+        return
+    text = await _build_team_text(session)
+    builder = InlineKeyboardBuilder()
+    builder.button(text="🔄 Обновить", callback_data="admin:team")
+    try:
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=builder.as_markup())  # type: ignore[union-attr]
+    except Exception:
+        pass
+    await callback.answer()
 
 
 @router.message(Command("set_secrets"))

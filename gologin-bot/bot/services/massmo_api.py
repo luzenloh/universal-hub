@@ -67,7 +67,7 @@ class MassmoClient:
         self.label = label
         self._jwt: str | None = cached_jwt
         self._active_order_id: int | None = None
-        self._sender_bank_name: str | None = None
+        self._sender_bank_name: str | None = "tinkoff"
         self._client = httpx.AsyncClient(
             timeout=12,
             follow_redirects=True,

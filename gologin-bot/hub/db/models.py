@@ -60,6 +60,10 @@ class Schedule(Base):
 
     __table_args__ = (UniqueConstraint("telegram_id", "week_start", name="uq_schedule_user_week"),)
 
+    @property
+    def days_dict(self) -> dict:
+        return json.loads(self.days)
+
 
 class Agent(Base):
     """Registered local agent instance."""
@@ -74,3 +78,13 @@ class Agent(Base):
     assigned_folder_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     notify_chat_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     owner_telegram_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # Pinned Telegram message (Feature 5)
+    pinned_message_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    pinned_chat_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # Session statistics (Feature 6)
+    last_payout_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    session_payout_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    active_payout_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    searching_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

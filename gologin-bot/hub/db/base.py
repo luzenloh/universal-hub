@@ -24,6 +24,12 @@ async def init_db() -> None:
             ("agents", "owner_telegram_id INTEGER"),
             ("agents", "notify_chat_id INTEGER"),
             ("agents", "assigned_folder_id INTEGER"),
+            ("agents", "pinned_message_id INTEGER"),
+            ("agents", "pinned_chat_id INTEGER"),
+            ("agents", "last_payout_at DATETIME"),
+            ("agents", "session_payout_count INTEGER DEFAULT 0"),
+            ("agents", "active_payout_count INTEGER DEFAULT 0"),
+            ("agents", "searching_count INTEGER DEFAULT 0"),
         ):
             try:
                 await conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col_def}"))
