@@ -121,7 +121,7 @@ if curl -fsSL "$RELEASE_URL" -o /tmp/agent.tar.gz 2>/dev/null; then
     rm -f /tmp/agent.tar.gz
     ok "Agent downloaded to $INSTALL_DIR"
 else
-    # Fallback: if script is run from inside the repo directory
+    # Fallback 1: if script is run from inside the repo directory
     SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
     if [[ -f "$SCRIPT_DIR/agent_main.py" ]]; then
         warn "GitHub release not found. Copying from current directory..."
@@ -130,7 +130,24 @@ else
               "$SCRIPT_DIR/" "$INSTALL_DIR/"
         ok "Agent copied from $SCRIPT_DIR"
     else
-        die "Could not download agent from GitHub and no local copy found.\n  Release URL: $RELEASE_URL"
+        # Fallback 2: download individual files from raw.githubusercontent.com
+        warn "GitHub release not found. Downloading files from raw GitHub..."
+        AGENT_FILES=(
+            "agent_main.py"
+            "requirements-agent.txt"
+            "agent/__init__.py"
+            "agent/core/__init__.py"
+            "agent/core/config.py"
+            "agent/services/__init__.py"
+            "agent/services/hub_client.py"
+            "agent/services/tunnel.py"
+        )
+        for f in "${AGENT_FILES[@]}"; do
+            mkdir -p "$INSTALL_DIR/$(dirname "$f")"
+            curl -fsSL "${RAW_BASE}/${f}" -o "${INSTALL_DIR}/${f}" \
+                || die "Failed to download ${f} from ${RAW_BASE}/${f}"
+        done
+        ok "Agent downloaded from raw GitHub to $INSTALL_DIR"
     fi
 fi
 
