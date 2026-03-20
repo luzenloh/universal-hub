@@ -277,7 +277,7 @@ OS="$(uname -s)"
 write_start_script() {
     cat > "${INSTALL_DIR}/start.sh" <<STARTSCRIPT
 #!/usr/bin/env bash
-export PATH="${HOME}/.cargo/bin:${HOME}/.local/bin:\$PATH"
+export PATH="/opt/homebrew/bin:/usr/local/bin:${HOME}/.cargo/bin:${HOME}/.local/bin:\$PATH"
 cd "${INSTALL_DIR}"
 exec $UV run --python "$PYTHON" agent_main.py >> "$LOG_FILE" 2>&1
 STARTSCRIPT
