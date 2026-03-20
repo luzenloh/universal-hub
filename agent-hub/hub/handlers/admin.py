@@ -302,12 +302,47 @@ async def cmd_set_secrets(message: Message, session: AsyncSession) -> None:
         await message.answer("❌ folder_id должен быть числом.")
         return
 
-    secrets = parts[2:]
+    massmo_secrets = parts[2:]
     repo = FolderRepository(session)
-    ok = await repo.set_massmo_secrets(folder_id, secrets)
+    ok = await repo.set_massmo_secrets(folder_id, massmo_secrets)
     if ok:
         await message.answer(
-            f"✅ Сохранено <b>{len(secrets)}</b> секретов для папки <b>{folder_id}</b>.",
+            f"✅ Сохранено <b>{len(massmo_secrets)}</b> MassMO секретов для папки <b>{folder_id}</b>.",
+            parse_mode="HTML",
+        )
+    else:
+        await message.answer(f"❌ Папка с id={folder_id} не найдена.")
+
+
+@router.message(Command("set_payfast"))
+async def cmd_set_payfast(message: Message, session: AsyncSession) -> None:
+    """Usage: /set_payfast <folder_id> <email> <password>"""
+    if not _admin_only(message):
+        return
+
+    parts = (message.text or "").split()
+    if len(parts) < 4:
+        await message.answer(
+            "Использование: <code>/set_payfast &lt;folder_id&gt; &lt;email&gt; &lt;password&gt;</code>\n\n"
+            "folder_id можно узнать командой /folders",
+            parse_mode="HTML",
+        )
+        return
+
+    try:
+        folder_id = int(parts[1])
+    except ValueError:
+        await message.answer("❌ folder_id должен быть числом.")
+        return
+
+    email = parts[2]
+    password = parts[3]
+    repo = FolderRepository(session)
+    ok = await repo.update_folder_secrets(folder_id, "payfast", {"email": email, "password": password})
+    if ok:
+        await message.answer(
+            f"✅ PayFast credentials сохранены для папки <b>{folder_id}</b>.\n"
+            f"Email: <code>{email}</code>",
             parse_mode="HTML",
         )
     else:

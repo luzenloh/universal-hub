@@ -15,6 +15,7 @@ from bot.services.ws_manager import WebSocketManager
 from web.models.schemas import CommandRequest, CommandResult, InboundState, InboundPlatformState, WindowState, WindowStatus
 
 _CACHE_FILE = Path(__file__).parent.parent.parent / "massmo_jwt_cache.json"
+_SECRETS_CACHE_FILE = Path(__file__).parent.parent.parent / "shift_secrets_cache.json"
 
 logger = logging.getLogger(__name__)
 
@@ -46,9 +47,13 @@ class Orchestrator:
     # ------------------------------------------------------------------ shift secrets (inbound)
 
     def set_shift_secrets(self, secrets: dict) -> None:
-        """Store payfast/montera config for the current shift."""
+        """Store payfast/montera config for the current shift and persist to disk."""
         self._shift_secrets = secrets
-        logger.info("Shift secrets set: platforms=%s", [k for k in secrets if k != "secrets"])
+        try:
+            _SECRETS_CACHE_FILE.write_text(json.dumps(secrets))
+        except Exception as exc:
+            logger.warning("Failed to persist shift secrets: %s", exc)
+        logger.info("Shift secrets set: platforms=%s", list(secrets.keys()))
 
     def get_inbound_states(self) -> list[InboundState]:
         states: list[InboundState] = []
@@ -132,6 +137,14 @@ class Orchestrator:
 
     async def restore_from_cache(self) -> int:
         """On startup: re-connect profiles from saved JWT cache. Returns count started."""
+        # Restore shift secrets
+        if _SECRETS_CACHE_FILE.exists():
+            try:
+                self._shift_secrets = json.loads(_SECRETS_CACHE_FILE.read_text())
+                logger.info("Restored shift secrets from cache: %s", list(self._shift_secrets.keys()))
+            except Exception as exc:
+                logger.warning("Failed to load shift secrets cache: %s", exc)
+
         if not _CACHE_FILE.exists():
             return 0
         try:
@@ -242,6 +255,10 @@ class Orchestrator:
             asyncio.create_task(ic.stop())
         self._inbound_controllers.clear()
         self._shift_secrets = None
+        try:
+            _SECRETS_CACHE_FILE.unlink(missing_ok=True)
+        except Exception:
+            pass
 
         if not self._agents:
             return

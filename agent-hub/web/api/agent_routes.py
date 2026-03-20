@@ -36,9 +36,7 @@ async def start_shift(body: AgentStartRequest, request: Request) -> dict[str, st
     await orchestrator.begin_fresh_session()
 
     # Store inbound platform secrets if provided in extended format
-    if isinstance(body.massmo_secrets, dict) and (
-        "payfast" in body.massmo_secrets or "montera" in body.massmo_secrets
-    ):
+    if isinstance(body.massmo_secrets, dict):
         orchestrator.set_shift_secrets(body.massmo_secrets)
 
     service = GoLoginService()

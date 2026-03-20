@@ -32,8 +32,16 @@ class Folder(Base):
         return json.loads(self.numbered_profile_ids)
 
     @property
+    def secrets_dict(self) -> dict:
+        """Return structured secrets dict. Handles legacy list[str] format transparently."""
+        raw = json.loads(self.massmo_secrets)
+        if isinstance(raw, list):
+            return {"massmo": raw}
+        return raw
+
+    @property
     def massmo_secrets_list(self) -> list[str]:
-        return json.loads(self.massmo_secrets)
+        return self.secrets_dict.get("massmo") or []
 
 
 class User(Base):

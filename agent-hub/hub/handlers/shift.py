@@ -213,7 +213,7 @@ async def shift_launch_folder(callback: CallbackQuery, session: AsyncSession) ->
     # count controls how many are actually launched; the rest stay available
     # for manual add via the dashboard "+ профиль" button.
     numbered_ids = folder.numbered_ids
-    massmo_secrets = folder.massmo_secrets_list
+    massmo_secrets = folder.secrets_dict
 
     if not numbered_ids:
         await callback.message.edit_text(  # type: ignore[union-attr]

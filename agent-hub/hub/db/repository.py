@@ -82,14 +82,19 @@ class FolderRepository:
         return result.rowcount > 0
 
     async def set_massmo_secrets(self, folder_id: int, secrets: list[str]) -> bool:
-        result = await self.session.execute(
-            update(Folder)
-            .where(Folder.id == folder_id)
-            .values(massmo_secrets=json.dumps(secrets))
-            .returning(Folder.id)
-        )
+        return await self.update_folder_secrets(folder_id, "massmo", secrets)
+
+    async def update_folder_secrets(self, folder_id: int, key: str, value: object) -> bool:
+        """Merge a single key into the folder's secrets dict (creates dict if legacy list)."""
+        result = await self.session.execute(select(Folder).where(Folder.id == folder_id))
+        folder = result.scalar_one_or_none()
+        if not folder:
+            return False
+        d = folder.secrets_dict
+        d[key] = value
+        folder.massmo_secrets = json.dumps(d)
         await self.session.commit()
-        return result.fetchone() is not None
+        return True
 
     async def upsert_folder(
         self,
