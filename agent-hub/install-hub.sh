@@ -2,23 +2,29 @@
 # install-hub.sh — MassMO Hub installer (Linux VPS)
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/OWNER/REPO/main/install-hub.sh | bash
+#   wget -qO- https://raw.githubusercontent.com/luzenloh/universal-hub/main/agent-hub/install-hub.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/luzenloh/universal-hub/main/agent-hub/install-hub.sh | bash
 #   ./install-hub.sh
 #
 # What it does:
-#   1. Checks / installs Docker + Docker Compose
-#   2. Downloads docker-compose.yml and .env.hub template
-#   3. Interactive setup: prompts for BOT_TOKEN, HUB_SECRET, etc.
-#   4. docker-compose up -d
+#   1. Installs system dependencies (git, python3, pip)
+#   2. Clones / updates the repo from GitHub
+#   3. Installs Python dependencies via pip
+#   4. Interactive .env.hub setup
+#   5. Registers as a systemd service (auto-start on boot)
+#   6. Starts the hub
 #
-# Requirements: bash, curl, sudo access
+# Requirements: bash, sudo access, Debian/Ubuntu or RHEL/CentOS
 # ─────────────────────────────────────────────────────────────────────────────
 
 set -euo pipefail
 
 GITHUB_REPO="luzenloh/universal-hub"
 GITHUB_SUBDIR="agent-hub"
-INSTALL_DIR="${HOME}/gologin-hub"
+INSTALL_DIR="${HOME}/hub"
+SERVICE_NAME="massmo-hub"
+LOG_FILE="/tmp/hub.log"
+PYTHON_MIN="3.10"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'
 BOLD='\033[1m'; NC='\033[0m'
@@ -26,17 +32,17 @@ info()  { echo -e "${CYAN}[INFO]${NC}  $*"; }
 ok()    { echo -e "${GREEN}[OK]${NC}    $*"; }
 warn()  { echo -e "${YELLOW}[WARN]${NC}  $*"; }
 die()   { echo -e "${RED}[ERROR]${NC} $*" >&2; exit 1; }
+
 prompt() {
-    # prompt <variable_name> <display_name> [default]
     local var="$1" label="$2" default="${3:-}"
     if [[ -n "$default" ]]; then
-        read -rp "  ${label} [${default}]: " val
+        read -rp "  ${label} [${default}]: " val </dev/tty
         val="${val:-$default}"
     else
-        read -rp "  ${label}: " val
+        read -rp "  ${label}: " val </dev/tty
         while [[ -z "$val" ]]; do
-            echo "  (required)"
-            read -rp "  ${label}: " val
+            echo "  (обязательное поле)"
+            read -rp "  ${label}: " val </dev/tty
         done
     fi
     printf -v "$var" '%s' "$val"
@@ -47,95 +53,109 @@ echo -e "  ${BOLD}${CYAN}MassMO Hub Installer${NC}"
 echo "  ─────────────────────────────────────────────────────"
 echo ""
 
-# ── Step 1: Docker ────────────────────────────────────────────────────────────
-info "Checking Docker..."
+# ── Step 1: System dependencies ───────────────────────────────────────────────
+info "Checking system packages..."
 
-if ! command -v docker &>/dev/null; then
-    info "Docker not found. Installing via get.docker.com..."
-    curl -fsSL https://get.docker.com | sh
-    # Add current user to docker group (takes effect after re-login or newgrp)
-    sudo usermod -aG docker "$USER" 2>/dev/null || true
-    ok "Docker installed"
-else
-    ok "Docker: $(docker --version)"
-fi
-
-if ! docker compose version &>/dev/null && ! docker-compose version &>/dev/null; then
-    info "Installing Docker Compose plugin..."
-    sudo apt-get install -y docker-compose-plugin 2>/dev/null \
-        || sudo yum install -y docker-compose-plugin 2>/dev/null \
-        || warn "Could not auto-install docker-compose-plugin. Install manually."
-fi
-
-COMPOSE_CMD="docker compose"
-if ! docker compose version &>/dev/null; then
-    COMPOSE_CMD="docker-compose"
-fi
-
-ok "Compose: $($COMPOSE_CMD version --short 2>/dev/null || echo 'found')"
-
-# ── Step 2: Download files ────────────────────────────────────────────────────
-info "Downloading Hub files..."
-mkdir -p "$INSTALL_DIR"
-cd "$INSTALL_DIR"
-
-BASE_URL="https://raw.githubusercontent.com/${GITHUB_REPO}/main/${GITHUB_SUBDIR}"
-
-# Try GitHub first, fall back to local copy
-download_or_copy() {
-    local file="$1"
-    if curl -fsSL "${BASE_URL}/${file}" -o "$file" 2>/dev/null; then
-        ok "Downloaded $file"
+install_pkg() {
+    if command -v apt-get &>/dev/null; then
+        sudo apt-get install -y "$@" -q
+    elif command -v yum &>/dev/null; then
+        sudo yum install -y "$@" -q
+    elif command -v dnf &>/dev/null; then
+        sudo dnf install -y "$@" -q
     else
-        SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-        if [[ -f "${SCRIPT_DIR}/${file}" ]]; then
-            cp "${SCRIPT_DIR}/${file}" .
-            ok "Copied $file from local directory"
-        else
-            warn "Could not download $file — create it manually."
-        fi
+        die "Unsupported package manager. Install manually: $*"
     fi
 }
 
-download_or_copy "docker-compose.yml"
-download_or_copy "hub_main.py"
+if ! command -v git &>/dev/null; then
+    info "Installing git..."
+    install_pkg git
+fi
+ok "git: $(git --version)"
 
-# Download hub/ and bot/ directories if not present
-if [[ ! -d "hub" ]]; then
-    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    if [[ -d "${SCRIPT_DIR}/hub" ]]; then
-        cp -r "${SCRIPT_DIR}/hub" .
-        cp -r "${SCRIPT_DIR}/web" . 2>/dev/null || true
-        cp -r "${SCRIPT_DIR}/bot" . 2>/dev/null || true
-        cp -r "${SCRIPT_DIR}/requirements.txt" . 2>/dev/null || true
-        ok "Source files copied from local directory"
-    else
-        warn "Hub source not found. Download the full release from GitHub."
+# Find Python 3.10+
+PYTHON=""
+for cmd in python3.12 python3.11 python3.10 python3; do
+    if command -v "$cmd" &>/dev/null; then
+        if "$cmd" -c "import sys; assert sys.version_info >= (3,10)" 2>/dev/null; then
+            PYTHON="$cmd"
+            ok "Python: $($cmd --version)"
+            break
+        fi
     fi
+done
+
+if [[ -z "$PYTHON" ]]; then
+    info "Installing Python 3.10+..."
+    if command -v apt-get &>/dev/null; then
+        sudo apt-get install -y python3 python3-pip python3-venv -q
+        PYTHON="python3"
+    elif command -v yum &>/dev/null; then
+        sudo yum install -y python310 python310-pip -q
+        PYTHON="python3.10"
+    else
+        die "Python 3.10+ not found. Install manually and re-run."
+    fi
+    ok "Python: $($PYTHON --version)"
 fi
 
-# ── Step 3: Interactive .env.hub setup ────────────────────────────────────────
+# pip
+if ! "$PYTHON" -m pip --version &>/dev/null; then
+    info "Installing pip..."
+    install_pkg python3-pip
+fi
+
+# ── Step 2: Clone / update repo ───────────────────────────────────────────────
+info "Getting Hub source from GitHub..."
+
+if [[ -d "${INSTALL_DIR}/.git" ]]; then
+    info "Repo already exists — pulling latest..."
+    git -C "$INSTALL_DIR" pull --ff-only
+    ok "Updated to latest"
+else
+    mkdir -p "$(dirname "$INSTALL_DIR")"
+    git clone "https://github.com/${GITHUB_REPO}.git" "$INSTALL_DIR" --depth=1
+    ok "Cloned to $INSTALL_DIR"
+fi
+
+# Move into the agent-hub subdirectory
+WORK_DIR="${INSTALL_DIR}/${GITHUB_SUBDIR}"
+[[ -d "$WORK_DIR" ]] || die "Expected subdirectory not found: $WORK_DIR"
+cd "$WORK_DIR"
+
+# ── Step 3: Install Python dependencies ───────────────────────────────────────
+info "Installing Python dependencies..."
+"$PYTHON" -m pip install -r requirements.txt -q --break-system-packages 2>/dev/null \
+    || "$PYTHON" -m pip install -r requirements.txt -q
+ok "Dependencies installed"
+
+# ── Step 4: Interactive .env.hub setup ────────────────────────────────────────
+SKIP_ENV=false
 if [[ -f ".env.hub" ]]; then
     warn ".env.hub already exists."
-    read -rp "  Overwrite? [y/N]: " overwrite
+    read -rp "  Перезаписать? [y/N]: " overwrite </dev/tty
     if [[ ! "$overwrite" =~ ^[Yy]$ ]]; then
-        info "Keeping existing .env.hub"
+        info "Оставляю существующий .env.hub"
         SKIP_ENV=true
     fi
 fi
 
-if [[ "${SKIP_ENV:-false}" != "true" ]]; then
+if [[ "$SKIP_ENV" == "false" ]]; then
     echo ""
-    echo -e "  ${BOLD}Hub configuration${NC}"
+    echo -e "  ${BOLD}Настройка Hub${NC}"
     echo "  ─────────────────────────────────────────────────────"
-    echo "  Press Enter to use the default value [shown in brackets]."
+    echo "  Enter = использовать значение по умолчанию [в скобках]"
     echo ""
 
-    prompt BOT_TOKEN      "Telegram Bot Token (from @BotFather)"
-    prompt ADMIN_USERNAME "Admin Telegram username (without @)"
-    prompt HUB_SECRET     "Hub secret key (random string, e.g. $(openssl rand -hex 16))"
-    prompt GOLOGIN_TOKEN  "GoLogin API token (optional, press Enter to skip)" ""
-    prompt HUB_PUBLIC_URL "Hub public URL (e.g. https://yourdomain.com or http://IP:8082)" "http://127.0.0.1:8082"
+    # Generate a random secret if openssl available
+    RANDOM_SECRET=$(openssl rand -hex 16 2>/dev/null || python3 -c "import secrets; print(secrets.token_hex(16))")
+
+    prompt BOT_TOKEN      "Telegram Bot Token (от @BotFather)"
+    prompt ADMIN_USERNAME "Твой Telegram username (без @)"
+    prompt HUB_SECRET     "Секретный ключ Hub" "$RANDOM_SECRET"
+    prompt GOLOGIN_TOKEN  "GoLogin API токен (Enter = пропустить)" ""
+    prompt HUB_PUBLIC_URL "Публичный URL Hub (http://IP_СЕРВЕРА:8082)" "http://127.0.0.1:8082"
 
     cat > .env.hub <<EOF
 BOT_TOKEN=${BOT_TOKEN}
@@ -149,50 +169,74 @@ DATABASE_URL=sqlite+aiosqlite:///./hub.db
 EOF
 
     chmod 600 .env.hub
-    ok ".env.hub written (permissions: 600)"
+    ok ".env.hub записан"
 fi
 
-# ── Step 4: docker-compose.yml fallback ───────────────────────────────────────
-if [[ ! -f "docker-compose.yml" ]]; then
-    info "Creating minimal docker-compose.yml..."
-    cat > docker-compose.yml <<'YAML'
-version: "3.9"
+# ── Step 5: Create start script ───────────────────────────────────────────────
+cat > "${WORK_DIR}/start.sh" <<STARTSCRIPT
+#!/usr/bin/env bash
+cd "${WORK_DIR}"
+exec $PYTHON hub_main.py >> "${LOG_FILE}" 2>&1
+STARTSCRIPT
+chmod +x "${WORK_DIR}/start.sh"
 
-services:
-  hub:
-    build: .
-    container_name: massmo-hub
-    restart: unless-stopped
-    ports:
-      - "8082:8082"
-    env_file:
-      - .env.hub
-    volumes:
-      - ./hub.db:/app/hub.db
-    command: python3 hub_main.py
-YAML
-    ok "docker-compose.yml created"
+# ── Step 6: Register as systemd service ───────────────────────────────────────
+if command -v systemctl &>/dev/null; then
+    info "Registering systemd service..."
+
+    sudo tee /etc/systemd/system/${SERVICE_NAME}.service > /dev/null <<UNIT
+[Unit]
+Description=MassMO Hub
+After=network.target
+
+[Service]
+Type=simple
+User=${USER}
+WorkingDirectory=${WORK_DIR}
+ExecStart=${WORK_DIR}/start.sh
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+    sudo systemctl daemon-reload
+    sudo systemctl enable "$SERVICE_NAME"
+    sudo systemctl restart "$SERVICE_NAME"
+    ok "systemd service зарегистрирован: $SERVICE_NAME"
+
+else
+    warn "systemd не найден — запускаю через nohup"
+    pkill -f hub_main 2>/dev/null || true
+    sleep 1
+    nohup "$WORK_DIR/start.sh" &
+    ok "Hub запущен в фоне"
 fi
 
-# ── Step 5: Start Hub ─────────────────────────────────────────────────────────
-info "Starting Hub..."
-
-# Pull / build
-$COMPOSE_CMD pull 2>/dev/null || true
-$COMPOSE_CMD up -d --build
-
+# ── Done ──────────────────────────────────────────────────────────────────────
+sleep 2
 echo ""
-echo -e "  ${GREEN}${BOLD}✅ MassMO Hub started!${NC}"
+echo -e "  ${GREEN}${BOLD}✅ MassMO Hub запущен!${NC}"
 echo "  ─────────────────────────────────────────────────────"
-echo "  Install dir: $INSTALL_DIR"
-echo "  Hub API:     http://0.0.0.0:8082"
+echo "  Install dir : $WORK_DIR"
+echo "  Hub API     : http://0.0.0.0:8082"
+echo "  Логи        : $LOG_FILE"
 echo ""
-echo "  Useful commands:"
-echo "    $COMPOSE_CMD logs -f hub        # live logs"
-echo "    $COMPOSE_CMD restart hub        # restart"
-echo "    $COMPOSE_CMD down               # stop"
+echo "  Полезные команды:"
+
+if command -v systemctl &>/dev/null; then
+    echo "    sudo systemctl status $SERVICE_NAME   # статус"
+    echo "    sudo systemctl restart $SERVICE_NAME  # перезапуск"
+    echo "    sudo systemctl stop $SERVICE_NAME     # остановить"
+    echo "    journalctl -u $SERVICE_NAME -f        # логи"
+else
+    echo "    tail -f $LOG_FILE                     # логи"
+    echo "    pkill -f hub_main                     # остановить"
+fi
+
 echo ""
-echo "  Next steps:"
-echo "    1. Make sure port 8082 is open in your firewall"
-echo "    2. Register agents: /register_agent <username> in Telegram"
+echo "  Следующие шаги:"
+echo "    1. Открой порт 8082 в файрволе сервера"
+echo "    2. Зарегистрируй агентов: /register_agent <username> в Telegram"
 echo ""
