@@ -18,6 +18,18 @@ curl -fsSL https://raw.githubusercontent.com/luzenloh/universal-hub/main/agent-h
   | bash -s -- GLAGENT_<token>
 ```
 
+## Перезапуск хаба на сервере
+
+`lsof` нет на сервере. Простой `kill` не убивает процесс — нужен **`kill -9`**.
+
+```bash
+cd ~/hub/agent-hub
+git pull origin main
+kill -9 $(fuser 8082/tcp)
+nohup .venv/bin/python hub_main.py >> /tmp/hub.log 2>&1 &
+tail -f /tmp/hub.log
+```
+
 ## Архитектура
 
 - **Hub** (`hub_main.py`) — центральный сервер, Telegram-бот, база агентов
