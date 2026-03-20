@@ -70,6 +70,42 @@ async def get_banks(request: Request) -> list[dict]:
         raise HTTPException(status_code=502, detail=str(exc))
 
 
+@router.get("/payfast/orders")
+async def get_payfast_orders(request: Request, page: int = 1, limit: int = 20) -> dict:
+    """Fetch BT payin orders from PayFast for the dashboard."""
+    from bot.services.payfast_client import PayfastClient
+
+    orch = _orchestrator(request)
+    secrets = orch._shift_secrets or {}
+    pf_secrets = secrets.get("payfast") or {}
+    if not pf_secrets.get("email"):
+        return {"orders": [], "page": page, "total_pages": 0, "configured": False}
+
+    client = PayfastClient(pf_secrets)
+    try:
+        data = await client._post(
+            "/get_orders_trader",
+            {"type": "checks", "page": page, "limit": limit},
+        )
+        balance_data: dict = {}
+        try:
+            balance_data = await client.get_balance()
+        except Exception:
+            pass
+        return {
+            "orders": data.get("orders") or [],
+            "page": page,
+            "total_pages": data.get("totalPages", 0),
+            "balance": balance_data,
+            "configured": True,
+        }
+    except Exception as exc:
+        logger.warning("PayFast orders fetch failed: %s", exc)
+        raise HTTPException(status_code=502, detail=str(exc))
+    finally:
+        await client.close()
+
+
 @router.get("/inbound", response_model=list[InboundState])
 async def get_inbound(request: Request) -> list[InboundState]:
     """Current state of all InboundControllers (one per active ACTIVE_PAYOUT window)."""

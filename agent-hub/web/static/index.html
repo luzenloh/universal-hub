@@ -45,6 +45,112 @@
   --input-border: #cbd5e1;
 }
 
+/* ── PayFast View ──────────────────────────────── */
+.pf-header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 20px; flex-wrap: wrap; border-bottom: 1px solid var(--card-border);
+}
+.pf-title { font-weight: 700; font-size: 16px; }
+.pf-balance { display: flex; gap: 8px; margin-left: auto; }
+.pf-bal-chip {
+  padding: 4px 14px; border-radius: 20px;
+  font-size: 13px; font-weight: 600;
+}
+.pf-bal-main { background: #92400e; color: #fbbf24; }
+.pf-bal-hold { background: #1e293b; color: #94a3b8; }
+.pf-filters {
+  display: flex; gap: 2px; padding: 10px 20px;
+  border-bottom: 1px solid var(--card-border); overflow-x: auto;
+}
+.pf-filter-btn {
+  padding: 6px 14px; border: none; background: transparent;
+  color: var(--text-muted); font-size: 13px; font-weight: 500;
+  cursor: pointer; border-radius: 6px; transition: all .15s;
+  font-family: inherit; white-space: nowrap;
+}
+.pf-filter-btn.active { background: var(--card); color: var(--text); }
+.pf-table-wrap { padding: 0 20px 20px; overflow-x: auto; }
+table.pf-table {
+  width: 100%; border-collapse: collapse; font-size: 13px; min-width: 860px;
+}
+.pf-table th {
+  text-align: left; padding: 10px 10px;
+  color: var(--text-muted); font-weight: 500; font-size: 11px;
+  text-transform: uppercase; letter-spacing: .04em;
+  border-bottom: 1px solid var(--card-border); white-space: nowrap;
+}
+.pf-table td {
+  padding: 13px 10px; border-bottom: 1px solid rgba(37,40,64,.5);
+  vertical-align: middle;
+}
+.pf-table tr:last-child td { border-bottom: none; }
+.pf-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 3px 10px; border-radius: 6px;
+  font-size: 11px; font-weight: 600; white-space: nowrap;
+}
+.pf-badge-succses { background: #15803d; color: #bbf7d0; }
+.pf-badge-accepted { background: #92400e; color: #fde68a; }
+.pf-badge-paid     { background: #1e3a8a; color: #bfdbfe; }
+.pf-badge-error    { background: #9a3412; color: #fed7aa; }
+.pf-badge-timeout  { background: #78350f; color: #fef3c7; }
+.pf-badge-wait     { background: #1f2937; color: #9ca3af; }
+.pf-id { font-family: monospace; font-size: 11px; color: var(--text-sub); }
+.pf-date-small { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.pf-amount-rub { font-weight: 600; }
+.pf-amount-usdt { font-size: 11px; color: var(--text-muted); }
+.pf-profit { color: #22c55e; font-weight: 600; }
+.pf-requisite { font-size: 12px; line-height: 1.6; }
+.pf-check-btn {
+  padding: 5px 12px; border: none; border-radius: 6px;
+  background: #2563eb; color: #fff; font-size: 12px; font-weight: 500;
+  cursor: pointer; font-family: inherit; white-space: nowrap;
+}
+.pf-check-btn:hover { background: #1d4ed8; }
+.pf-no-check { font-size: 12px; color: var(--text-muted); }
+.pf-pagination {
+  display: flex; align-items: center; justify-content: center;
+  gap: 10px; padding: 14px 20px; color: var(--text-muted); font-size: 13px;
+}
+.pf-page-btn {
+  padding: 5px 14px; border: none; border-radius: 6px;
+  background: var(--card); color: var(--text); font-size: 13px;
+  cursor: pointer; font-family: inherit; border: 1px solid var(--card-border);
+}
+.pf-page-btn:disabled { opacity: .35; cursor: not-allowed; }
+.pf-empty { text-align: center; padding: 40px; color: var(--text-muted); font-size: 14px; }
+.pf-not-configured {
+  padding: 60px 20px; text-align: center; color: var(--text-muted);
+}
+.pf-not-configured .pf-nc-icon { font-size: 32px; margin-bottom: 10px; }
+.pf-not-configured p { font-size: 14px; }
+/* Receipt modal */
+.pf-modal-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,.8); z-index: 500;
+  align-items: center; justify-content: center;
+}
+.pf-modal-overlay.open { display: flex; }
+.pf-modal-box {
+  background: var(--card); border-radius: 14px; padding: 20px;
+  max-width: 640px; width: 94%; max-height: 92vh;
+  display: flex; flex-direction: column; gap: 12px;
+  border: 1px solid var(--card-border);
+}
+.pf-modal-header { display: flex; align-items: center; justify-content: space-between; }
+.pf-modal-title { font-weight: 600; font-size: 15px; }
+.pf-modal-close {
+  width: 28px; height: 28px; border: none; border-radius: 6px;
+  background: var(--input-bg); color: var(--text-sub); cursor: pointer;
+  font-size: 16px; display: flex; align-items: center; justify-content: center;
+  line-height: 1;
+}
+.pf-modal-content { flex: 1; overflow: auto; display: flex; align-items: flex-start; justify-content: center; }
+.pf-modal-content img { max-width: 100%; border-radius: 8px; }
+.pf-modal-content embed { width: 100%; height: 68vh; border-radius: 8px; }
+.pf-modal-open-link { font-size: 12px; color: var(--accent); text-decoration: none; }
+.pf-modal-open-link:hover { text-decoration: underline; }
+
 /* ── Reset & Base ──────────────────────────────── */
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
@@ -677,6 +783,7 @@ body {
   <div class="navbar-tabs">
     <button class="tab-btn active" onclick="switchView('main')">Мониторинг</button>
     <button class="tab-btn" onclick="switchView('profiles')">Профили / Лимиты</button>
+    <button class="tab-btn" onclick="switchView('payfast')">PayFast</button>
   </div>
   <div class="navbar-right">
     <span class="session-counter" id="session-counter"></span>
@@ -765,6 +872,52 @@ body {
     <div class="profiles-grid" id="profilesGrid">
       <div style="color:var(--text-muted);font-size:14px;padding:40px 0">Нет активных профилей</div>
     </div>
+  </div>
+</div>
+
+<!-- View: PayFast -->
+<div class="view" id="view-payfast">
+  <div class="pf-header">
+    <span class="pf-title">PayFast</span>
+    <span style="color:var(--text-muted);font-size:13px" id="pfAccountName"></span>
+    <div class="pf-balance" id="pfBalanceWrap" style="display:none">
+      <span class="pf-bal-chip pf-bal-main" id="pfBalMain"></span>
+      <span class="pf-bal-chip pf-bal-hold" id="pfBalHold"></span>
+    </div>
+    <button class="btn-nav" style="background:var(--card);color:var(--text-sub);margin-left:auto" onclick="loadPayfastOrders(true)">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+      Обновить
+    </button>
+  </div>
+  <div class="pf-filters">
+    <button class="pf-filter-btn active" onclick="pfSetFilter('all',this)">Все</button>
+    <button class="pf-filter-btn" onclick="pfSetFilter('SUCCSES',this)">Успешно</button>
+    <button class="pf-filter-btn" onclick="pfSetFilter('PAID',this)">Оплачено</button>
+    <button class="pf-filter-btn" onclick="pfSetFilter('ACCEPTED',this)">В ожидании</button>
+    <button class="pf-filter-btn" onclick="pfSetFilter('TIMEOUT',this)">Время вышло</button>
+    <button class="pf-filter-btn" onclick="pfSetFilter('ERROR',this)">Отменено</button>
+  </div>
+  <div class="pf-table-wrap">
+    <div id="pfTableContainer"><div class="pf-empty">Загрузка…</div></div>
+  </div>
+  <div class="pf-pagination" id="pfPagination" style="display:none">
+    <button class="pf-page-btn" id="pfPrevBtn" onclick="pfChangePage(-1)">← Назад</button>
+    <span id="pfPageInfo" style="color:var(--text-muted);font-size:13px"></span>
+    <button class="pf-page-btn" id="pfNextBtn" onclick="pfChangePage(1)">Вперёд →</button>
+  </div>
+</div>
+
+<!-- Receipt modal -->
+<div class="pf-modal-overlay" id="pfReceiptModal" onclick="pfModalBgClick(event)">
+  <div class="pf-modal-box">
+    <div class="pf-modal-header">
+      <span class="pf-modal-title">Чек</span>
+      <div style="display:flex;align-items:center;gap:10px">
+        <a class="pf-modal-open-link" id="pfModalLink" href="#" target="_blank">Открыть в новой вкладке ↗</a>
+        <button class="pf-modal-close" onclick="closePfReceiptModal()">✕</button>
+      </div>
+    </div>
+    <div class="pf-modal-content" id="pfModalContent"></div>
   </div>
 </div>
 
@@ -974,10 +1127,12 @@ async function connectCard(label) {
 function switchView(name) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.getElementById('view-' + name).classList.add('active');
+  const views = ['main', 'profiles', 'payfast'];
   document.querySelectorAll('.tab-btn').forEach((b, i) => {
-    b.classList.toggle('active', (i === 0 && name === 'main') || (i === 1 && name === 'profiles'));
+    b.classList.toggle('active', views[i] === name);
   });
   if (name === 'profiles') renderProfiles();
+  if (name === 'payfast') pfOnOpen();
 }
 
 // ── WebSocket ─────────────────────────────────────
@@ -2034,6 +2189,184 @@ async function fetchInbound() {
 }
 
 setInterval(fetchInbound, 5000);
+
+// ── PayFast view ──────────────────────────────────
+let pfAllOrders = [];
+let pfFilter = 'all';
+let pfPage = 1;
+let pfTotalPages = 1;
+let pfRefreshTimer = null;
+
+const PF_STATUS = {
+  SUCCSES: ['pf-badge-succses', 'Успешно'],
+  ACCEPTED:['pf-badge-accepted', 'В ожидании'],
+  PAID:    ['pf-badge-paid',     'Оплачено'],
+  ERROR:   ['pf-badge-error',    'Отменено'],
+  TIMEOUT: ['pf-badge-timeout',  'Время вышло'],
+  WAIT:    ['pf-badge-wait',     'Новая'],
+};
+
+function pfBadge(status) {
+  const [cls, label] = PF_STATUS[status] || ['pf-badge-wait', esc(status)];
+  return `<span class="pf-badge ${cls}">${label}</span>`;
+}
+
+function pfFmtDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  const date = d.toLocaleDateString('ru-RU', {day:'2-digit', month:'2-digit', year:'2-digit'});
+  const time = d.toLocaleTimeString('ru-RU', {hour:'2-digit', minute:'2-digit'});
+  return `${date} ${time}`;
+}
+
+function pfFmtRub(n) {
+  if (n == null) return '—';
+  return Number(n).toLocaleString('ru-RU') + ' ₽';
+}
+
+function pfFmtUsdt(n) {
+  if (n == null) return '';
+  return Number(n).toFixed(2) + ' USDT';
+}
+
+function pfRenderTable() {
+  const container = document.getElementById('pfTableContainer');
+  const list = pfFilter === 'all'
+    ? pfAllOrders
+    : pfAllOrders.filter(o => o.status === pfFilter);
+
+  if (!list.length) {
+    container.innerHTML = `<div class="pf-empty">${pfAllOrders.length ? 'Нет заявок по выбранному фильтру' : 'Заявок нет'}</div>`;
+    return;
+  }
+
+  const rows = list.map(o => {
+    const ei = o.extra_info || {};
+    const fileUrl = ei.file || ei.check || '';
+    const bill = o.bill || {};
+    const checkBtn = fileUrl
+      ? `<button class="pf-check-btn" onclick="openPfReceipt('${esc(fileUrl)}')">Посмотреть чек</button>`
+      : `<span class="pf-no-check">Ждём чек</span>`;
+    const req = [
+      bill.bank    ? `<div><b>${esc(bill.bank)}</b></div>` : '',
+      bill.fio     ? `<div style="color:var(--text-sub)">ФИО: ${esc(bill.fio)}</div>` : '',
+      bill.reciver ? `<div style="color:var(--text-sub)">${esc(bill.reciver)}</div>` : '',
+    ].join('');
+    return `<tr>
+      <td>
+        ${pfBadge(o.status)}
+        <div class="pf-date-small">${pfFmtDate(o.updatedAt)}</div>
+      </td>
+      <td>
+        <div class="pf-id">${esc(o.uuid_system || '')}</div>
+        <div class="pf-date-small">${pfFmtDate(o.createdAt)}</div>
+      </td>
+      <td><div class="pf-date-small" style="font-size:12px">${pfFmtDate(o.updatedAt)}</div></td>
+      <td>
+        <div class="pf-amount-rub">${pfFmtRub(o.amount)}</div>
+        <div class="pf-amount-usdt">${pfFmtUsdt(o.amount_tether)}</div>
+      </td>
+      <td style="white-space:nowrap">${o.exchange_rate ? Number(o.exchange_rate).toFixed(2) + ' ₽' : '—'}</td>
+      <td class="pf-profit">${o.fee_tether_trader != null ? '+' + Number(o.fee_tether_trader).toFixed(4) + ' USDT' : '—'}</td>
+      <td><div class="pf-requisite">${req || '—'}</div></td>
+      <td>${checkBtn}</td>
+    </tr>`;
+  }).join('');
+
+  container.innerHTML = `<table class="pf-table">
+    <thead><tr>
+      <th>Статус</th><th>ID</th><th>Время обработки</th>
+      <th>Сумма</th><th>Курс</th><th>Прибыль</th><th>Реквизиты</th><th>Действие</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+function pfSetFilter(f, btn) {
+  pfFilter = f;
+  document.querySelectorAll('.pf-filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  pfRenderTable();
+}
+
+function pfChangePage(delta) {
+  const np = pfPage + delta;
+  if (np < 1 || np > pfTotalPages) return;
+  pfPage = np;
+  loadPayfastOrders();
+}
+
+async function loadPayfastOrders(resetPage) {
+  if (resetPage) pfPage = 1;
+  try {
+    const data = await api('GET', `/api/v1/payfast/orders?page=${pfPage}&limit=20`);
+    if (!data.configured) {
+      document.getElementById('pfTableContainer').innerHTML = `
+        <div class="pf-not-configured">
+          <div class="pf-nc-icon">⚙</div>
+          <p>PayFast не настроен. Запустите смену с секретами PayFast.</p>
+        </div>`;
+      document.getElementById('pfPagination').style.display = 'none';
+      document.getElementById('pfBalanceWrap').style.display = 'none';
+      return;
+    }
+
+    pfAllOrders = data.orders || [];
+    pfTotalPages = data.total_pages || 1;
+    pfRenderTable();
+
+    // Balance
+    const bal = data.balance || {};
+    if (bal.balance != null) {
+      document.getElementById('pfBalMain').textContent = Number(bal.balance).toFixed(2) + ' USDT';
+      document.getElementById('pfBalHold').textContent = '🔒 ' + Number(bal.balance_hold || 0).toFixed(4) + ' USDT';
+      document.getElementById('pfBalanceWrap').style.display = 'flex';
+    }
+
+    // Pagination
+    const pag = document.getElementById('pfPagination');
+    if (pfTotalPages > 1) {
+      pag.style.display = 'flex';
+      document.getElementById('pfPageInfo').textContent = `Страница ${pfPage} из ${pfTotalPages}`;
+      document.getElementById('pfPrevBtn').disabled = pfPage <= 1;
+      document.getElementById('pfNextBtn').disabled = pfPage >= pfTotalPages;
+    } else {
+      pag.style.display = 'none';
+    }
+  } catch(e) {
+    document.getElementById('pfTableContainer').innerHTML =
+      `<div class="pf-empty">Ошибка: ${esc(e.message)}</div>`;
+  }
+}
+
+function pfOnOpen() {
+  loadPayfastOrders(true);
+  if (!pfRefreshTimer) {
+    pfRefreshTimer = setInterval(() => {
+      const view = document.getElementById('view-payfast');
+      if (view && view.classList.contains('active')) loadPayfastOrders();
+    }, 15000);
+  }
+}
+
+function openPfReceipt(url) {
+  const content = document.getElementById('pfModalContent');
+  const isPdf = url.toLowerCase().includes('.pdf');
+  content.innerHTML = isPdf
+    ? `<embed src="${url}" type="application/pdf" width="100%" height="560px">`
+    : `<img src="${url}" alt="Чек">`;
+  document.getElementById('pfModalLink').href = url;
+  document.getElementById('pfReceiptModal').classList.add('open');
+}
+
+function closePfReceiptModal() {
+  document.getElementById('pfReceiptModal').classList.remove('open');
+  document.getElementById('pfModalContent').innerHTML = '';
+}
+
+function pfModalBgClick(e) {
+  if (e.target === document.getElementById('pfReceiptModal')) closePfReceiptModal();
+}
 
 // ── Init ──────────────────────────────────────────
 connectWS();

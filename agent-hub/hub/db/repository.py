@@ -320,11 +320,10 @@ class AgentSetupTokenRepository:
         return token
 
     async def get_valid(self, jti: str) -> AgentSetupToken | None:
-        """Return token only if it exists, is unused and not expired."""
+        """Return token if it exists and has not expired (multi-use within expiry window)."""
         result = await self.session.execute(
             select(AgentSetupToken).where(
                 AgentSetupToken.jti == jti,
-                AgentSetupToken.used_at == None,  # noqa: E711
                 AgentSetupToken.expires_at > datetime.utcnow(),
             )
         )

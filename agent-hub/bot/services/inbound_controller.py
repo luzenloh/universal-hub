@@ -200,20 +200,47 @@ class InboundController:
         if self._handled:
             return
 
-        # Payfast: status=="PROCESSING" → payment incoming
+        # Payfast
         pf_order_id = self._platform_orders.get("payfast")
-        if pf_order_id:
-            for order in payfast_orders:
-                if order.get("uuid_system") == pf_order_id or order.get("id") == pf_order_id:
-                    if order.get("status") == "PROCESSING":
-                        receipt_url = (
-                            (order.get("extra_info") or {}).get("check")
-                            or (order.get("extra_info") or {}).get("file")
-                        )
-                        asyncio.create_task(
-                            self._handle_payment("payfast", pf_order_id, receipt_url)
-                        )
-                        return
+        if pf_order_id is not None:
+            if pf_order_id.startswith("amount:"):
+                # BT flow: orders are client-initiated — match by amount
+                try:
+                    expected_amount = float(pf_order_id.split(":", 1)[1])
+                except (ValueError, IndexError):
+                    expected_amount = None
+
+                for order in payfast_orders:
+                    # Payment ready: check submitted (status_check==1) and ACCEPTED
+                    if order.get("status") != "ACCEPTED":
+                        continue
+                    if order.get("status_check") != 1:
+                        continue
+                    if expected_amount is not None:
+                        try:
+                            order_amount = float(order.get("amount", 0))
+                        except (TypeError, ValueError):
+                            continue
+                        if abs(order_amount - expected_amount) > 1.0:
+                            continue
+                    ei = order.get("extra_info") or {}
+                    receipt_url = ei.get("file") or ei.get("check")
+                    order_uuid = order.get("uuid_system") or order.get("id", "")
+                    asyncio.create_task(
+                        self._handle_payment("payfast", order_uuid, receipt_url)
+                    )
+                    return
+            else:
+                # Legacy: match by pre-created order UUID
+                for order in payfast_orders:
+                    if order.get("uuid_system") == pf_order_id or order.get("id") == pf_order_id:
+                        if order.get("status") == "ACCEPTED" and order.get("status_check") == 1:
+                            ei = order.get("extra_info") or {}
+                            receipt_url = ei.get("file") or ei.get("check")
+                            asyncio.create_task(
+                                self._handle_payment("payfast", pf_order_id, receipt_url)
+                            )
+                            return
 
         # Montera: status=="client_paid" → payment incoming
         mt_order_id = self._platform_orders.get("montera")
@@ -267,6 +294,13 @@ class InboundController:
                 logger.warning("[Inbound %s] UPLOAD_RECEIPT failed: %s", self.window_id, result.message)
         except Exception as exc:
             logger.error("[Inbound %s] send_command UPLOAD_RECEIPT error: %s", self.window_id, exc)
+
+        # Confirm the order on the payment platform
+        if platform == "payfast" and order_id:
+            try:
+                await self._payfast.confirm_order(order_id)
+            except Exception as exc:
+                logger.error("[Inbound %s] Payfast confirm_order failed: %s", self.window_id, exc)
 
         self._platform_statuses[platform] = "completed"
         self.status = InboundStatus.COMPLETED

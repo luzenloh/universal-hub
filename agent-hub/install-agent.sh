@@ -241,7 +241,7 @@ info "Hub URL: $HUB_URL"
 info "Claiming config from Hub..."
 
 CLAIM_RESPONSE=$(curl -fsSL "${HUB_URL}/hub/claim/${JTI}" 2>/dev/null) \
-    || die "Failed to claim config from Hub.\n  Make sure the Hub is running and accessible at: $HUB_URL\n  Tokens are single-use and valid for 7 days."
+    || die "Failed to claim config from Hub.\n  Make sure the Hub is running and accessible at: $HUB_URL\n  Token is valid for 7 days from creation."
 
 # Parse claim response
 HUB_SECRET=$($PYTHON -c "import json,sys; d=json.loads('''$CLAIM_RESPONSE'''); print(d['hub_secret'])")
