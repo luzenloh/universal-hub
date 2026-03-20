@@ -109,6 +109,43 @@ fi
 
 ok "uv: $($UV --version 2>/dev/null || echo 'found')"
 
+# ── Step 2b: cloudflared ──────────────────────────────────────────────────────
+info "Checking cloudflared..."
+
+if ! command -v cloudflared &>/dev/null; then
+    info "Installing cloudflared..."
+    OS="$(uname -s)"
+    ARCH="$(uname -m)"
+    if [[ "$OS" == "Darwin" ]]; then
+        if command -v brew &>/dev/null; then
+            brew install cloudflare/cloudflare/cloudflared -q \
+                && ok "cloudflared installed via Homebrew" \
+                || warn "Homebrew install failed, trying direct download..."
+        fi
+        if ! command -v cloudflared &>/dev/null; then
+            CF_ARCH="amd64"
+            [[ "$ARCH" == "arm64" ]] && CF_ARCH="arm64"
+            curl -fsSL "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-darwin-${CF_ARCH}" \
+                -o /usr/local/bin/cloudflared \
+                && chmod +x /usr/local/bin/cloudflared \
+                && ok "cloudflared installed to /usr/local/bin" \
+                || warn "Could not install cloudflared — tunnel will not be available"
+        fi
+    elif [[ "$OS" == "Linux" ]]; then
+        CF_ARCH="amd64"
+        [[ "$ARCH" == "aarch64" ]] && CF_ARCH="arm64"
+        curl -fsSL "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${CF_ARCH}" \
+            -o /usr/local/bin/cloudflared \
+            && chmod +x /usr/local/bin/cloudflared \
+            && ok "cloudflared installed to /usr/local/bin" \
+            || warn "Could not install cloudflared — tunnel will not be available"
+    else
+        warn "Unsupported OS for cloudflared auto-install. Install manually: https://developers.cloudflare.com/cloudflared/install"
+    fi
+else
+    ok "cloudflared: $(cloudflared --version 2>/dev/null | head -1)"
+fi
+
 # ── Step 3: Download agent ────────────────────────────────────────────────────
 info "Downloading latest agent release..."
 mkdir -p "$INSTALL_DIR"

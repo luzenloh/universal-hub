@@ -171,11 +171,17 @@ async def hub_claim(jti: str) -> dict:
     No Bearer auth — the jti itself is the shared secret (128-bit entropy, single-use).
     """
     async with async_session_factory() as session:
-        repo = AgentSetupTokenRepository(session)
-        token = await repo.get_valid(jti)
+        token_repo = AgentSetupTokenRepository(session)
+        token = await token_repo.get_valid(jti)
         if not token:
             raise HTTPException(status_code=404, detail="Token not found, expired, or already used")
-        await repo.mark_used(jti)
+        await token_repo.mark_used(jti)
+        # Pre-create agent record so heartbeats land even before tunnel is up
+        agent_repo = AgentRepository(session)
+        await agent_repo.upsert_agent(
+            token.agent_id, public_url="", local_url="",
+            owner_telegram_id=token.owner_telegram_id,
+        )
 
     logger.info("Setup token claimed: agent_id=%s owner=%s", token.agent_id, token.owner_telegram_id)
     return {
