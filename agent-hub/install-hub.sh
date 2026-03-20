@@ -124,10 +124,19 @@ WORK_DIR="${INSTALL_DIR}/${GITHUB_SUBDIR}"
 [[ -d "$WORK_DIR" ]] || die "Expected subdirectory not found: $WORK_DIR"
 cd "$WORK_DIR"
 
-# ── Step 3: Install Python dependencies ───────────────────────────────────────
-info "Installing Python dependencies..."
-"$PYTHON" -m pip install -r requirements.txt -q --break-system-packages 2>/dev/null \
-    || "$PYTHON" -m pip install -r requirements.txt -q
+# ── Step 3: Create venv & install Python dependencies ─────────────────────────
+info "Setting up Python virtual environment..."
+if [[ ! -d "${WORK_DIR}/.venv" ]]; then
+    "$PYTHON" -m venv "${WORK_DIR}/.venv"
+    ok "venv created"
+else
+    ok "venv already exists"
+fi
+VENV_PY="${WORK_DIR}/.venv/bin/python"
+
+info "Installing Python dependencies (this may take a minute)..."
+"$VENV_PY" -m pip install --upgrade pip -q --no-cache-dir
+"$VENV_PY" -m pip install -r requirements.txt -q --no-cache-dir
 ok "Dependencies installed"
 
 # ── Step 4: Interactive .env.hub setup ────────────────────────────────────────
@@ -172,15 +181,31 @@ EOF
     ok ".env.hub записан"
 fi
 
-# ── Step 5: Create start script ───────────────────────────────────────────────
+# ── Step 5: Ensure swap exists (prevents OOM deadlock) ────────────────────────
+if [[ $(swapon --show 2>/dev/null | wc -l) -le 1 ]]; then
+    info "No swap detected — creating 1 GB swapfile..."
+    if sudo fallocate -l 1G /swapfile 2>/dev/null || sudo dd if=/dev/zero of=/swapfile bs=1M count=1024 status=none; then
+        sudo chmod 600 /swapfile
+        sudo mkswap /swapfile -q
+        sudo swapon /swapfile
+        grep -q '/swapfile' /etc/fstab || echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab > /dev/null
+        ok "Swap 1 GB создан и активирован"
+    else
+        warn "Не удалось создать swap — продолжаю без него"
+    fi
+else
+    ok "Swap уже есть: $(swapon --show --noheadings 2>/dev/null | head -1)"
+fi
+
+# ── Step 6: Create start script ───────────────────────────────────────────────
 cat > "${WORK_DIR}/start.sh" <<STARTSCRIPT
 #!/usr/bin/env bash
 cd "${WORK_DIR}"
-exec $PYTHON hub_main.py >> "${LOG_FILE}" 2>&1
+exec ${WORK_DIR}/.venv/bin/python hub_main.py >> "${LOG_FILE}" 2>&1
 STARTSCRIPT
 chmod +x "${WORK_DIR}/start.sh"
 
-# ── Step 6: Register as systemd service ───────────────────────────────────────
+# ── Step 7: Register as systemd service ───────────────────────────────────────
 if command -v systemctl &>/dev/null; then
     info "Registering systemd service..."
 
@@ -196,6 +221,10 @@ WorkingDirectory=${WORK_DIR}
 ExecStart=${WORK_DIR}/start.sh
 Restart=on-failure
 RestartSec=10
+# Memory limits — prevents OOM deadlock on low-RAM servers
+MemoryMax=512M
+MemorySwapMax=512M
+OOMScoreAdj=500
 
 [Install]
 WantedBy=multi-user.target
@@ -210,7 +239,7 @@ else
     warn "systemd не найден — запускаю через nohup"
     pkill -f hub_main 2>/dev/null || true
     sleep 1
-    nohup "$WORK_DIR/start.sh" &
+    nohup "${WORK_DIR}/start.sh" &
     ok "Hub запущен в фоне"
 fi
 
