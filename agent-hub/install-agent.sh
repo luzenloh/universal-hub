@@ -122,7 +122,7 @@ if curl -fsSL "$RELEASE_URL" -o /tmp/agent.tar.gz 2>/dev/null; then
     ok "Agent downloaded to $INSTALL_DIR"
 else
     # Fallback: if script is run from inside the repo directory
-    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
     if [[ -f "$SCRIPT_DIR/agent_main.py" ]]; then
         warn "GitHub release not found. Copying from current directory..."
         rsync -a --exclude='.env*' --exclude='.venv' --exclude='__pycache__' \
