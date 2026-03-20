@@ -199,6 +199,7 @@ else
             "web/api/agent_routes.py"
             "web/models/__init__.py"
             "web/models/schemas.py"
+            "web/static/index.html"
         )
         for f in "${AGENT_FILES[@]}"; do
             mkdir -p "$INSTALL_DIR/$(dirname "$f")"
