@@ -2822,7 +2822,7 @@ async function submitPfCreateRequisite() {
   if (!fio)     { errEl.textContent = 'Введите ФИО';      errEl.style.display=''; return; }
   if (!limit_min_order || !limit_max_order) { errEl.textContent = 'Укажите лимиты'; errEl.style.display=''; return; }
 
-  const body = { token: 'P2P', sub_token, bank, reciver, fio, limit_min_order, limit_max_order, limit_sum };
+  const body = { type: 'checks', token: 'P2P', sub_token, bank, reciver, fio, limit_min_order, limit_max_order, limit_sum };
   if (maxOrdersRaw) body.max_orders = parseInt(maxOrdersRaw);
 
   btn.disabled = true;

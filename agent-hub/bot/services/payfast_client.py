@@ -177,12 +177,12 @@ class PayfastClient:
 
     async def archive_requisite(self, req_id: str) -> None:
         """Archive a requisite: POST /action_bill {action:archive}."""
-        await self._post("/action_bill", {"action": "archive", "id": req_id})
+        await self._post("/action_bill", {"action": "archive", "id": int(req_id)})
         logger.info("Payfast: requisite %s archived", req_id)
 
     async def toggle_requisite(self, req_id: str) -> None:
         """Toggle requisite active/inactive: POST /action_bill {action:toggle}."""
-        await self._post("/action_bill", {"action": "toggle", "id": req_id})
+        await self._post("/action_bill", {"action": "toggle", "id": int(req_id)})
         logger.info("Payfast: requisite %s toggled", req_id)
 
     async def close(self) -> None:

@@ -25,6 +25,7 @@ class AddProfileRequest(BaseModel):
 
 
 class CreateRequisiteRequest(BaseModel):
+    type: str             # "checks"
     bank: str
     fio: str
     reciver: str          # card/phone number (PayFast spelling)
