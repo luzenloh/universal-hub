@@ -1074,17 +1074,11 @@ body {
       <button class="pf-modal-close" onclick="closePfCreateModal()">✕</button>
     </div>
     <div class="pf-form-group">
-      <label class="pf-form-label">Гео</label>
-      <select class="pf-form-select" id="pfReqGeo">
-        <option value="RU">Россия (RU)</option>
-      </select>
-    </div>
-    <div class="pf-form-group">
       <label class="pf-form-label">Способ оплаты</label>
       <select class="pf-form-select" id="pfReqMethod">
-        <option value="card">По номеру карты</option>
-        <option value="phone">По номеру телефона</option>
-        <option value="sbp">СБП</option>
+        <option value="CARDRUB">По номеру карты</option>
+        <option value="PHONERUB">По номеру телефона</option>
+        <option value="SBPRUB">СБП</option>
       </select>
     </div>
     <div class="pf-form-group">
@@ -2681,7 +2675,7 @@ async function loadPfRequisites() {
   container.innerHTML = '<div class="pf-empty">Загрузка…</div>';
   try {
     const data = await api('GET', '/api/v1/payfast/requisites');
-    pfAllReqs = data.requisites || [];
+    pfAllReqs = data.data || [];
     pfRenderReqs();
   } catch(e) {
     container.innerHTML = `<div class="pf-empty">Ошибка: ${esc(e.message)}</div>`;
@@ -2698,8 +2692,8 @@ function pfReqSetFilter(f, btn) {
 function pfRenderReqs() {
   const container = document.getElementById('pfReqContainer');
   let list = pfAllReqs;
-  if (pfReqFilter === 'active') list = list.filter(r => r.active || r.status === 'active');
-  if (pfReqFilter === 'inactive') list = list.filter(r => !r.active && r.status !== 'active');
+  if (pfReqFilter === 'active')   list = list.filter(r => r.status === 1);
+  if (pfReqFilter === 'inactive') list = list.filter(r => r.status !== 1);
 
   if (!list.length) {
     container.innerHTML = '<div class="pf-empty">Нет реквизитов</div>';
@@ -2716,40 +2710,46 @@ function pfRenderReqs() {
   </table>`;
 }
 
+const PF_SUBTOKEN_LABEL = {
+  CARDRUB:  'По номеру карты',
+  PHONERUB: 'По номеру телефона',
+  SBPRUB:   'СБП',
+};
+
 function pfReqRow(r) {
-  const id = r.id || r._id || r.uuid || '';
-  const isActive = r.active || r.is_active || r.status === 'active';
-  const successAmt = Number(r.amount_success || r.success_amount || 0).toLocaleString('ru-RU');
-  const pendingAmt = Number(r.amount_pending || r.pending_amount || 0).toLocaleString('ru-RU');
-  const remainAmt  = Number(r.amount_remain || r.remain_amount || 0).toLocaleString('ru-RU');
-  const limitTotal = Number(r.limit || r.total_limit || 0);
-  const limitUsed  = Number(r.limit_used || r.used || 0);
-  const pct = limitTotal > 0 ? Math.min(100, (limitUsed / limitTotal) * 100) : 0;
-  const minL = Number(r.min_limit || 0).toLocaleString('ru-RU');
-  const maxL = Number(r.max_limit || 0).toLocaleString('ru-RU');
+  const id        = r.id || '';
+  const isActive  = r.status === 1;
+  const successAmt = Number(r.amount_succses || 0).toLocaleString('ru-RU');
+  const pendingAmt = Number(r.current_sum || 0).toLocaleString('ru-RU');
+  const limitTotal = Number(r.limit_sum || 0);
+  const remainAmt  = Math.max(0, limitTotal - Number(r.amount_succses || 0)).toLocaleString('ru-RU');
+  const pct        = limitTotal > 0 ? Math.min(100, (Number(r.current_sum || 0) / limitTotal) * 100) : 0;
+  const minL       = Number(r.limit_min_order || 0).toLocaleString('ru-RU');
+  const maxL       = Number(r.limit_max_order || 0).toLocaleString('ru-RU');
+  const methodLabel = PF_SUBTOKEN_LABEL[r.sub_token] || r.sub_token || '—';
 
   return `<tr>
-    <td><span style="font-family:monospace;font-size:12px">${esc(r.requisite || r.card || r.number || '—')}</span></td>
-    <td>${esc(r.bank || r.bank_name || '—')}</td>
-    <td style="font-size:12px;color:var(--text-muted)">${esc(r.payment_method || r.method || '—')}</td>
+    <td><span style="font-family:monospace;font-size:12px">${esc(r.reciver || '—')}</span></td>
+    <td>${esc(r.bank || '—')}</td>
+    <td style="font-size:12px;color:var(--text-muted)">${esc(methodLabel)}</td>
     <td>
       <div class="pf-req-progress-wrap">
         <div style="font-size:11px;color:#22c55e">Успешно: ${successAmt} ₽</div>
         <div style="font-size:11px;color:#f59e0b">В ожидании: ${pendingAmt} ₽</div>
-        <div style="font-size:11px;color:var(--text-muted)">Осталось: ${remainAmt} ₽</div>
+        <div style="font-size:11px;color:var(--text-muted)">Осталось долить: ${remainAmt} ₽</div>
       </div>
     </td>
     <td>
       <div class="pf-req-progress-bar"><div class="pf-req-progress-fill" style="width:${pct}%"></div></div>
-      <div class="pf-req-limit-txt" style="margin-top:3px">${limitUsed.toLocaleString('ru-RU')} / ${limitTotal.toLocaleString('ru-RU')}</div>
+      <div class="pf-req-limit-txt" style="margin-top:3px">${Number(r.current_sum||0).toLocaleString('ru-RU')} / ${limitTotal.toLocaleString('ru-RU')}</div>
       <div class="pf-req-limit-txt">MIN: ${minL} ₽ &nbsp; MAX: ${maxL} ₽</div>
     </td>
     <td>
-      <button class="pf-toggle ${isActive ? 'on' : 'off'}" onclick="pfToggleReq('${esc(id)}',this)" title="${isActive ? 'Активен' : 'Неактивен'}"></button>
+      <button class="pf-toggle ${isActive ? 'on' : 'off'}" onclick="pfToggleReq('${esc(String(id))}',this)" title="${isActive ? 'Активен' : 'Неактивен'}"></button>
     </td>
-    <td style="font-size:12px">${esc(r.fio || r.full_name || '—')}</td>
+    <td style="font-size:12px">${esc(r.fio || '—')}</td>
     <td>
-      <button class="pf-archive-btn" onclick="pfArchiveReq('${esc(id)}')">Архивировать</button>
+      <button class="pf-archive-btn" onclick="pfArchiveReq('${esc(String(id))}')">Архивировать</button>
     </td>
   </tr>`;
 }
@@ -2808,23 +2808,22 @@ async function submitPfCreateRequisite() {
   errEl.style.display = 'none';
   const btn = document.getElementById('pfCreateConfirmBtn');
 
-  const geo = document.getElementById('pfReqGeo').value;
-  const payment_method = document.getElementById('pfReqMethod').value;
-  const bank = document.getElementById('pfReqBank').value;
-  const requisite = document.getElementById('pfReqNumber').value.trim();
-  const fio = document.getElementById('pfReqFio').value.trim();
-  const min_limit = parseFloat(document.getElementById('pfReqMinLimit').value) || 0;
-  const max_limit = parseFloat(document.getElementById('pfReqMaxLimit').value) || 0;
-  const maxOrdersRaw = document.getElementById('pfReqMaxOrders').value.trim();
-  const limit = parseFloat(document.getElementById('pfReqLimit').value) || 0;
+  const sub_token = document.getElementById('pfReqMethod').value;  // CARDRUB / PHONERUB / SBPRUB
+  const bank      = document.getElementById('pfReqBank').value;
+  const reciver   = document.getElementById('pfReqNumber').value.trim();
+  const fio       = document.getElementById('pfReqFio').value.trim();
+  const limit_min_order = parseFloat(document.getElementById('pfReqMinLimit').value) || 0;
+  const limit_max_order = parseFloat(document.getElementById('pfReqMaxLimit').value) || 0;
+  const maxOrdersRaw    = document.getElementById('pfReqMaxOrders').value.trim();
+  const limit_sum       = parseFloat(document.getElementById('pfReqLimit').value) || 0;
 
-  if (!bank) { errEl.textContent = 'Выберите банк'; errEl.style.display=''; return; }
-  if (!requisite) { errEl.textContent = 'Введите реквизит'; errEl.style.display=''; return; }
-  if (!fio) { errEl.textContent = 'Введите ФИО'; errEl.style.display=''; return; }
-  if (!min_limit || !max_limit) { errEl.textContent = 'Укажите лимиты'; errEl.style.display=''; return; }
+  if (!bank)    { errEl.textContent = 'Выберите банк';    errEl.style.display=''; return; }
+  if (!reciver) { errEl.textContent = 'Введите реквизит'; errEl.style.display=''; return; }
+  if (!fio)     { errEl.textContent = 'Введите ФИО';      errEl.style.display=''; return; }
+  if (!limit_min_order || !limit_max_order) { errEl.textContent = 'Укажите лимиты'; errEl.style.display=''; return; }
 
-  const body = { geo, payment_method, bank, requisite, fio, min_limit, max_limit, limit };
-  if (maxOrdersRaw) body.max_active_orders = parseInt(maxOrdersRaw);
+  const body = { token: 'P2P', sub_token, bank, reciver, fio, limit_min_order, limit_max_order, limit_sum };
+  if (maxOrdersRaw) body.max_orders = parseInt(maxOrdersRaw);
 
   btn.disabled = true;
   btn.textContent = 'Создаём…';

@@ -163,18 +163,17 @@ class PayfastClient:
         ct = r.headers.get("content-type", "image/jpeg").split(";")[0].strip()
         return r.content, ct
 
-    async def get_requisites(self, status: str = "all") -> list[dict]:
-        """POST /get_bills → list of requisite dicts."""
+    async def get_requisites(self, page: int = 1, limit: int = 50) -> dict:
+        """POST /get_bills → {data: [...], totalPages: N}."""
         try:
-            data = await self._post("/get_bills", {"status": status})
-            return data.get("bills") or data.get("requisites") or []
+            return await self._post("/get_bills", {"page": page, "limit": limit})
         except Exception as exc:
             logger.warning("Payfast get_requisites failed: %s", exc)
-            return []
+            return {"data": [], "totalPages": 0}
 
     async def create_requisite(self, params: dict) -> dict:
-        """POST /get_bills — create via action_bill with action=create."""
-        return await self._post("/action_bill", {"action": "create", **params})
+        """POST /create_bill → created requisite dict."""
+        return await self._post("/create_bill", params)
 
     async def archive_requisite(self, req_id: str) -> None:
         """Archive a requisite: POST /action_bill {action:archive}."""

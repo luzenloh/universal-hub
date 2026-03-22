@@ -25,15 +25,15 @@ class AddProfileRequest(BaseModel):
 
 
 class CreateRequisiteRequest(BaseModel):
-    geo: str
-    payment_method: str
     bank: str
-    requisite: str
     fio: str
-    min_limit: float
-    max_limit: float
-    max_active_orders: int | None = None
-    limit: float
+    reciver: str          # card/phone number (PayFast spelling)
+    token: str            # "P2P"
+    sub_token: str        # "CARDRUB" / "PHONERUB" / etc.
+    limit_min_order: float
+    limit_max_order: float
+    limit_sum: float
+    max_orders: int | None = None
 
 logger = logging.getLogger(__name__)
 
@@ -149,12 +149,11 @@ async def proxy_payfast_receipt(request: Request, url: str = Query(...)) -> Resp
 
 
 @router.get("/payfast/requisites")
-async def get_payfast_requisites(request: Request, status: str = "all") -> dict:
+async def get_payfast_requisites(request: Request, page: int = 1, limit: int = 50) -> dict:
     """List trader requisites from PayFast."""
     client = _pf_client_from_request(request)
     try:
-        requisites = await client.get_requisites(status)
-        return {"requisites": requisites}
+        return await client.get_requisites(page=page, limit=limit)
     except Exception as exc:
         logger.warning("PayFast requisites fetch failed: %s", exc)
         raise HTTPException(status_code=502, detail=str(exc))
