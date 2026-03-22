@@ -163,10 +163,12 @@ class PayfastClient:
         ct = r.headers.get("content-type", "image/jpeg").split(";")[0].strip()
         return r.content, ct
 
-    async def get_requisites(self, page: int = 1, limit: int = 50) -> dict:
+    async def get_requisites(self, page: int = 1, limit: int = 50, status: str = "all") -> dict:
         """POST /get_bills → {data: [...], totalPages: N}."""
         try:
-            return await self._post("/get_bills", {"page": page, "limit": limit})
+            result = await self._post("/get_bills", {"status": status, "page": page, "limit": limit})
+            logger.info("Payfast get_bills raw: keys=%s data_len=%s", list(result.keys()), len(result.get("data") or []))
+            return result
         except Exception as exc:
             logger.warning("Payfast get_requisites failed: %s", exc)
             return {"data": [], "totalPages": 0}
