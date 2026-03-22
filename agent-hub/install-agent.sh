@@ -269,7 +269,7 @@ ok ".env.agent written (permissions: 600)"
 # ── Step 6: Install dependencies ──────────────────────────────────────────────
 info "Installing Python dependencies..."
 cd "$INSTALL_DIR"
-$UV pip install -r requirements-agent.txt --python "$PYTHON" -q
+$UV pip install -r requirements-agent.txt --python "$PYTHON" --system -q
 ok "Dependencies installed"
 
 # ── Step 7: Register as startup service ───────────────────────────────────────
