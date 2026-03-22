@@ -164,26 +164,26 @@ class PayfastClient:
         return r.content, ct
 
     async def get_requisites(self, status: str = "all") -> list[dict]:
-        """POST /get_requisites_trader → list of requisite dicts."""
+        """POST /get_bills → list of requisite dicts."""
         try:
-            data = await self._post("/get_requisites_trader", {"status": status})
-            return data.get("requisites") or []
+            data = await self._post("/get_bills", {"status": status})
+            return data.get("bills") or data.get("requisites") or []
         except Exception as exc:
             logger.warning("Payfast get_requisites failed: %s", exc)
             return []
 
     async def create_requisite(self, params: dict) -> dict:
-        """POST /create_requisite_trader → created requisite dict."""
-        return await self._post("/create_requisite_trader", params)
+        """POST /get_bills — create via action_bill with action=create."""
+        return await self._post("/action_bill", {"action": "create", **params})
 
     async def archive_requisite(self, req_id: str) -> None:
-        """Archive a requisite: POST /action_requisite_trader {action:archive}."""
-        await self._post("/action_requisite_trader", {"action": "archive", "id": req_id})
+        """Archive a requisite: POST /action_bill {action:archive}."""
+        await self._post("/action_bill", {"action": "archive", "id": req_id})
         logger.info("Payfast: requisite %s archived", req_id)
 
     async def toggle_requisite(self, req_id: str) -> None:
-        """Toggle requisite active/inactive: POST /action_requisite_trader {action:toggle}."""
-        await self._post("/action_requisite_trader", {"action": "toggle", "id": req_id})
+        """Toggle requisite active/inactive: POST /action_bill {action:toggle}."""
+        await self._post("/action_bill", {"action": "toggle", "id": req_id})
         logger.info("Payfast: requisite %s toggled", req_id)
 
     async def close(self) -> None:
