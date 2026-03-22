@@ -2,9 +2,12 @@ from __future__ import annotations
 import logging
 import os
 import tempfile
+from urllib.parse import unquote
 
 import httpx
-from fastapi import APIRouter, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile
+from fastapi.responses import Response
+from pydantic import BaseModel
 
 from bot.services.orchestrator import Orchestrator
 from web.models.schemas import (
@@ -15,10 +18,22 @@ from web.models.schemas import (
     InboundState,
     WindowState,
 )
-from pydantic import BaseModel
+
 
 class AddProfileRequest(BaseModel):
     label: str
+
+
+class CreateRequisiteRequest(BaseModel):
+    geo: str
+    payment_method: str
+    bank: str
+    requisite: str
+    fio: str
+    min_limit: float
+    max_limit: float
+    max_active_orders: int | None = None
+    limit: float
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +116,92 @@ async def get_payfast_orders(request: Request, page: int = 1, limit: int = 20) -
         }
     except Exception as exc:
         logger.warning("PayFast orders fetch failed: %s", exc)
+        raise HTTPException(status_code=502, detail=str(exc))
+    finally:
+        await client.close()
+
+
+def _pf_client_from_request(request: Request):
+    """Return (PayfastClient, secrets) or raise 503/404."""
+    from bot.services.payfast_client import PayfastClient
+    orch = _orchestrator(request)
+    secrets = orch._shift_secrets or {}
+    pf_secrets = secrets.get("payfast") or {}
+    if not pf_secrets.get("email"):
+        raise HTTPException(status_code=503, detail="PayFast не настроен")
+    return PayfastClient(pf_secrets)
+
+
+@router.get("/payfast/receipt")
+async def proxy_payfast_receipt(request: Request, url: str = Query(...)) -> Response:
+    """Proxy a PayFast receipt file with Bearer auth so the browser can display it."""
+    client = _pf_client_from_request(request)
+    try:
+        content, content_type = await client.proxy_receipt(unquote(url))
+        return Response(content=content, media_type=content_type)
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(status_code=exc.response.status_code, detail="Не удалось загрузить чек")
+    except Exception as exc:
+        logger.warning("PayFast receipt proxy failed: %s", exc)
+        raise HTTPException(status_code=502, detail=str(exc))
+    finally:
+        await client.close()
+
+
+@router.get("/payfast/requisites")
+async def get_payfast_requisites(request: Request, status: str = "all") -> dict:
+    """List trader requisites from PayFast."""
+    client = _pf_client_from_request(request)
+    try:
+        requisites = await client.get_requisites(status)
+        return {"requisites": requisites}
+    except Exception as exc:
+        logger.warning("PayFast requisites fetch failed: %s", exc)
+        raise HTTPException(status_code=502, detail=str(exc))
+    finally:
+        await client.close()
+
+
+@router.post("/payfast/requisites")
+async def create_payfast_requisite(body: CreateRequisiteRequest, request: Request) -> dict:
+    """Create a new requisite on PayFast."""
+    client = _pf_client_from_request(request)
+    try:
+        params = body.model_dump(exclude_none=True)
+        result = await client.create_requisite(params)
+        return result
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(status_code=exc.response.status_code, detail=exc.response.text)
+    except Exception as exc:
+        logger.warning("PayFast create_requisite failed: %s", exc)
+        raise HTTPException(status_code=502, detail=str(exc))
+    finally:
+        await client.close()
+
+
+@router.post("/payfast/requisites/{req_id}/archive")
+async def archive_payfast_requisite(req_id: str, request: Request) -> dict:
+    """Archive a requisite on PayFast."""
+    client = _pf_client_from_request(request)
+    try:
+        await client.archive_requisite(req_id)
+        return {"status": "archived"}
+    except Exception as exc:
+        logger.warning("PayFast archive_requisite failed: %s", exc)
+        raise HTTPException(status_code=502, detail=str(exc))
+    finally:
+        await client.close()
+
+
+@router.post("/payfast/requisites/{req_id}/toggle")
+async def toggle_payfast_requisite(req_id: str, request: Request) -> dict:
+    """Toggle a requisite active/inactive on PayFast."""
+    client = _pf_client_from_request(request)
+    try:
+        await client.toggle_requisite(req_id)
+        return {"status": "toggled"}
+    except Exception as exc:
+        logger.warning("PayFast toggle_requisite failed: %s", exc)
         raise HTTPException(status_code=502, detail=str(exc))
     finally:
         await client.close()

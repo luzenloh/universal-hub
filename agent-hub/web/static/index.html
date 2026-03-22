@@ -151,6 +151,91 @@ table.pf-table {
 .pf-modal-open-link { font-size: 12px; color: var(--accent); text-decoration: none; }
 .pf-modal-open-link:hover { text-decoration: underline; }
 
+/* Sub-tabs (Заявки / Реквизиты) */
+.pf-subtabs {
+  display: flex; gap: 0; padding: 10px 20px 0;
+  border-bottom: 1px solid var(--card-border);
+}
+.pf-subtab-btn {
+  padding: 8px 18px; border: none; border-bottom: 2px solid transparent;
+  background: transparent; color: var(--text-muted); font-size: 13px; font-weight: 500;
+  cursor: pointer; font-family: inherit; white-space: nowrap; transition: color .15s;
+}
+.pf-subtab-btn.active { color: var(--text); border-bottom-color: var(--accent); }
+/* Реквизиты sub-view */
+.pf-req-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 20px; border-bottom: 1px solid var(--card-border);
+}
+.pf-req-filter-wrap { display: flex; gap: 4px; }
+.pf-req-filter-btn {
+  padding: 5px 12px; border: none; border-radius: 6px;
+  background: transparent; color: var(--text-muted); font-size: 12px; font-weight: 500;
+  cursor: pointer; font-family: inherit;
+}
+.pf-req-filter-btn.active { background: var(--card); color: var(--text); }
+.pf-req-create-btn {
+  margin-left: auto; padding: 7px 16px; border: none; border-radius: 8px;
+  background: var(--accent); color: #fff; font-size: 13px; font-weight: 600;
+  cursor: pointer; font-family: inherit;
+}
+.pf-req-create-btn:hover { opacity: .87; }
+table.pf-req-table {
+  width: 100%; border-collapse: collapse; font-size: 13px; min-width: 820px;
+}
+.pf-req-table th {
+  text-align: left; padding: 10px; color: var(--text-muted); font-weight: 500; font-size: 11px;
+  border-bottom: 1px solid var(--card-border); white-space: nowrap;
+}
+.pf-req-table td { padding: 12px 10px; border-bottom: 1px solid rgba(37,40,64,.5); vertical-align: middle; }
+.pf-req-table tr:last-child td { border-bottom: none; }
+.pf-req-progress-wrap { display: flex; flex-direction: column; gap: 3px; font-size: 12px; }
+.pf-req-progress-bar { height: 6px; border-radius: 3px; background: var(--input-bg); width: 120px; overflow: hidden; }
+.pf-req-progress-fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg,#6366f1,#8b5cf6); }
+.pf-req-limit-txt { font-size: 11px; color: var(--text-muted); }
+.pf-toggle {
+  width: 36px; height: 20px; border-radius: 10px; border: none; cursor: pointer;
+  position: relative; transition: background .2s; flex-shrink: 0;
+}
+.pf-toggle.on  { background: #22c55e; }
+.pf-toggle.off { background: #475569; }
+.pf-toggle::after {
+  content:''; position: absolute; top: 3px; left: 3px;
+  width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: left .2s;
+}
+.pf-toggle.on::after { left: 19px; }
+.pf-archive-btn {
+  padding: 5px 12px; border: none; border-radius: 6px;
+  background: #dc2626; color: #fff; font-size: 12px; cursor: pointer; font-family: inherit;
+}
+.pf-archive-btn:hover { background: #b91c1c; }
+/* Create requisite modal */
+.pf-create-modal-overlay {
+  display: none; position: fixed; inset: 0; background: rgba(0,0,0,.8); z-index: 600;
+  align-items: center; justify-content: center;
+}
+.pf-create-modal-overlay.open { display: flex; }
+.pf-create-modal-box {
+  background: var(--card); border-radius: 14px; padding: 24px;
+  max-width: 520px; width: 94%; max-height: 92vh; overflow-y: auto;
+  border: 1px solid var(--card-border); display: flex; flex-direction: column; gap: 14px;
+}
+.pf-create-modal-title { font-weight: 600; font-size: 15px; }
+.pf-create-modal-header { display: flex; align-items: center; justify-content: space-between; }
+.pf-form-group { display: flex; flex-direction: column; gap: 5px; }
+.pf-form-label { font-size: 12px; color: var(--text-muted); font-weight: 500; }
+.pf-form-input, .pf-form-select {
+  padding: 8px 12px; border-radius: 8px; border: 1px solid var(--card-border);
+  background: var(--input-bg); color: var(--text); font-size: 13px; font-family: inherit;
+  width: 100%;
+}
+.pf-form-input:focus, .pf-form-select:focus { outline: none; border-color: var(--accent); }
+.pf-create-confirm-btn {
+  padding: 10px; border: none; border-radius: 8px; background: var(--accent); color: #fff;
+  font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; width: 100%;
+}
+.pf-create-confirm-btn:disabled { opacity: .5; cursor: not-allowed; }
+
 /* ── Reset & Base ──────────────────────────────── */
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
@@ -924,26 +1009,46 @@ body {
       <span class="pf-bal-chip pf-bal-main" id="pfBalMain"></span>
       <span class="pf-bal-chip pf-bal-hold" id="pfBalHold"></span>
     </div>
-    <button class="btn-nav" style="background:var(--card);color:var(--text-sub);margin-left:auto" onclick="loadPayfastOrders(true)">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-      Обновить
-    </button>
   </div>
-  <div class="pf-filters">
-    <button class="pf-filter-btn active" onclick="pfSetFilter('all',this)">Все</button>
-    <button class="pf-filter-btn" onclick="pfSetFilter('SUCCSES',this)">Успешно</button>
-    <button class="pf-filter-btn" onclick="pfSetFilter('PAID',this)">Оплачено</button>
-    <button class="pf-filter-btn" onclick="pfSetFilter('ACCEPTED',this)">В ожидании</button>
-    <button class="pf-filter-btn" onclick="pfSetFilter('TIMEOUT',this)">Время вышло</button>
-    <button class="pf-filter-btn" onclick="pfSetFilter('ERROR',this)">Отменено</button>
+  <!-- Sub-tabs -->
+  <div class="pf-subtabs">
+    <button class="pf-subtab-btn active" id="pfSubtabOrders" onclick="pfSwitchSubtab('orders')">Заявки</button>
+    <button class="pf-subtab-btn" id="pfSubtabReqs" onclick="pfSwitchSubtab('requisites')">Реквизиты</button>
   </div>
-  <div class="pf-table-wrap">
-    <div id="pfTableContainer"><div class="pf-empty">Загрузка…</div></div>
+
+  <!-- Sub-view: Заявки -->
+  <div id="pfViewOrders">
+    <div class="pf-filters">
+      <button class="pf-filter-btn active" onclick="pfSetFilter('all',this)">Все</button>
+      <button class="pf-filter-btn" onclick="pfSetFilter('SUCCSES',this)">Успешно</button>
+      <button class="pf-filter-btn" onclick="pfSetFilter('PAID',this)">Оплачено</button>
+      <button class="pf-filter-btn" onclick="pfSetFilter('ACCEPTED',this)">В ожидании</button>
+      <button class="pf-filter-btn" onclick="pfSetFilter('TIMEOUT',this)">Время вышло</button>
+      <button class="pf-filter-btn" onclick="pfSetFilter('ERROR',this)">Отменено</button>
+    </div>
+    <div class="pf-table-wrap">
+      <div id="pfTableContainer"><div class="pf-empty">Загрузка…</div></div>
+    </div>
+    <div class="pf-pagination" id="pfPagination" style="display:none">
+      <button class="pf-page-btn" id="pfPrevBtn" onclick="pfChangePage(-1)">← Назад</button>
+      <span id="pfPageInfo" style="color:var(--text-muted);font-size:13px"></span>
+      <button class="pf-page-btn" id="pfNextBtn" onclick="pfChangePage(1)">Вперёд →</button>
+    </div>
   </div>
-  <div class="pf-pagination" id="pfPagination" style="display:none">
-    <button class="pf-page-btn" id="pfPrevBtn" onclick="pfChangePage(-1)">← Назад</button>
-    <span id="pfPageInfo" style="color:var(--text-muted);font-size:13px"></span>
-    <button class="pf-page-btn" id="pfNextBtn" onclick="pfChangePage(1)">Вперёд →</button>
+
+  <!-- Sub-view: Реквизиты -->
+  <div id="pfViewReqs" style="display:none">
+    <div class="pf-req-header">
+      <div class="pf-req-filter-wrap">
+        <button class="pf-req-filter-btn active" onclick="pfReqSetFilter('all',this)">Все</button>
+        <button class="pf-req-filter-btn" onclick="pfReqSetFilter('active',this)">Активные</button>
+        <button class="pf-req-filter-btn" onclick="pfReqSetFilter('inactive',this)">Неактивные</button>
+      </div>
+      <button class="pf-req-create-btn" onclick="openPfCreateModal()">+ Создать реквизит</button>
+    </div>
+    <div class="pf-table-wrap">
+      <div id="pfReqContainer"><div class="pf-empty">Загрузка…</div></div>
+    </div>
   </div>
 </div>
 
@@ -958,6 +1063,64 @@ body {
       </div>
     </div>
     <div class="pf-modal-content" id="pfModalContent"></div>
+  </div>
+</div>
+
+<!-- Create requisite modal -->
+<div class="pf-create-modal-overlay" id="pfCreateModal" onclick="pfCreateModalBgClick(event)">
+  <div class="pf-create-modal-box">
+    <div class="pf-create-modal-header">
+      <span class="pf-create-modal-title">Создание реквизита</span>
+      <button class="pf-modal-close" onclick="closePfCreateModal()">✕</button>
+    </div>
+    <div class="pf-form-group">
+      <label class="pf-form-label">Гео</label>
+      <select class="pf-form-select" id="pfReqGeo">
+        <option value="RU">Россия (RU)</option>
+      </select>
+    </div>
+    <div class="pf-form-group">
+      <label class="pf-form-label">Способ оплаты</label>
+      <select class="pf-form-select" id="pfReqMethod">
+        <option value="card">По номеру карты</option>
+        <option value="phone">По номеру телефона</option>
+        <option value="sbp">СБП</option>
+      </select>
+    </div>
+    <div class="pf-form-group">
+      <label class="pf-form-label">Банк</label>
+      <select class="pf-form-select" id="pfReqBank">
+        <option value="">Выберите банк…</option>
+      </select>
+    </div>
+    <div class="pf-form-group">
+      <label class="pf-form-label">Реквизит</label>
+      <input class="pf-form-input" id="pfReqNumber" type="text" placeholder="Номер карты / телефона">
+    </div>
+    <div class="pf-form-group">
+      <label class="pf-form-label">ФИО</label>
+      <input class="pf-form-input" id="pfReqFio" type="text" placeholder="Иванов Иван Иванович">
+    </div>
+    <div style="display:flex;gap:10px">
+      <div class="pf-form-group" style="flex:1">
+        <label class="pf-form-label">Минимальный лимит RUB</label>
+        <input class="pf-form-input" id="pfReqMinLimit" type="number" placeholder="1000">
+      </div>
+      <div class="pf-form-group" style="flex:1">
+        <label class="pf-form-label">Максимальный лимит RUB</label>
+        <input class="pf-form-input" id="pfReqMaxLimit" type="number" placeholder="50000">
+      </div>
+    </div>
+    <div class="pf-form-group">
+      <label class="pf-form-label">Максимальное количество активных заявок</label>
+      <input class="pf-form-input" id="pfReqMaxOrders" type="number" placeholder="Можно оставить пустым">
+    </div>
+    <div class="pf-form-group">
+      <label class="pf-form-label">Лимит (дневной/общий RUB)</label>
+      <input class="pf-form-input" id="pfReqLimit" type="number" placeholder="100000">
+    </div>
+    <button class="pf-create-confirm-btn" id="pfCreateConfirmBtn" onclick="submitPfCreateRequisite()">Подтвердить</button>
+    <div id="pfCreateError" style="color:#ef4444;font-size:12px;display:none"></div>
   </div>
 </div>
 
@@ -2463,22 +2626,27 @@ async function loadPayfastOrders(resetPage) {
 }
 
 function pfOnOpen() {
-  loadPayfastOrders(true);
+  pfSwitchSubtab(pfCurrentSubtab);
   if (!pfRefreshTimer) {
     pfRefreshTimer = setInterval(() => {
       const view = document.getElementById('view-payfast');
-      if (view && view.classList.contains('active')) loadPayfastOrders();
+      if (view && view.classList.contains('active')) {
+        if (pfCurrentSubtab === 'orders') loadPayfastOrders();
+        else loadPfRequisites();
+      }
     }, 15000);
   }
 }
 
-function openPfReceipt(url) {
+function openPfReceipt(rawUrl) {
+  // Proxy through our backend so Bearer auth is added automatically
+  const proxyUrl = `/api/v1/payfast/receipt?url=${encodeURIComponent(rawUrl)}`;
   const content = document.getElementById('pfModalContent');
-  const isPdf = url.toLowerCase().includes('.pdf');
+  const isPdf = rawUrl.toLowerCase().includes('.pdf');
   content.innerHTML = isPdf
-    ? `<embed src="${url}" type="application/pdf" width="100%" height="560px">`
-    : `<img src="${url}" alt="Чек">`;
-  document.getElementById('pfModalLink').href = url;
+    ? `<embed src="${proxyUrl}" type="application/pdf" width="100%" height="560px">`
+    : `<img src="${proxyUrl}" alt="Чек">`;
+  document.getElementById('pfModalLink').href = proxyUrl;
   document.getElementById('pfReceiptModal').classList.add('open');
 }
 
@@ -2489,6 +2657,188 @@ function closePfReceiptModal() {
 
 function pfModalBgClick(e) {
   if (e.target === document.getElementById('pfReceiptModal')) closePfReceiptModal();
+}
+
+// ── PayFast sub-tabs ───────────────────────────────
+let pfCurrentSubtab = 'orders';
+
+function pfSwitchSubtab(tab) {
+  pfCurrentSubtab = tab;
+  document.getElementById('pfSubtabOrders').classList.toggle('active', tab === 'orders');
+  document.getElementById('pfSubtabReqs').classList.toggle('active', tab === 'requisites');
+  document.getElementById('pfViewOrders').style.display = tab === 'orders' ? '' : 'none';
+  document.getElementById('pfViewReqs').style.display = tab === 'requisites' ? '' : 'none';
+  if (tab === 'orders') loadPayfastOrders(true);
+  if (tab === 'requisites') loadPfRequisites();
+}
+
+// ── PayFast Реквизиты ─────────────────────────────
+let pfAllReqs = [];
+let pfReqFilter = 'all';
+
+async function loadPfRequisites() {
+  const container = document.getElementById('pfReqContainer');
+  container.innerHTML = '<div class="pf-empty">Загрузка…</div>';
+  try {
+    const data = await api('GET', '/api/v1/payfast/requisites');
+    pfAllReqs = data.requisites || [];
+    pfRenderReqs();
+  } catch(e) {
+    container.innerHTML = `<div class="pf-empty">Ошибка: ${esc(e.message)}</div>`;
+  }
+}
+
+function pfReqSetFilter(f, btn) {
+  pfReqFilter = f;
+  document.querySelectorAll('.pf-req-filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  pfRenderReqs();
+}
+
+function pfRenderReqs() {
+  const container = document.getElementById('pfReqContainer');
+  let list = pfAllReqs;
+  if (pfReqFilter === 'active') list = list.filter(r => r.active || r.status === 'active');
+  if (pfReqFilter === 'inactive') list = list.filter(r => !r.active && r.status !== 'active');
+
+  if (!list.length) {
+    container.innerHTML = '<div class="pf-empty">Нет реквизитов</div>';
+    return;
+  }
+
+  container.innerHTML = `<table class="pf-req-table">
+    <thead><tr>
+      <th>Реквизиты</th><th>Банк</th><th>Метод</th>
+      <th>Прогресс</th><th>Лимит Объёма</th>
+      <th>Статус</th><th>ФИО</th><th>Действие</th>
+    </tr></thead>
+    <tbody>${list.map(r => pfReqRow(r)).join('')}</tbody>
+  </table>`;
+}
+
+function pfReqRow(r) {
+  const id = r.id || r._id || r.uuid || '';
+  const isActive = r.active || r.is_active || r.status === 'active';
+  const successAmt = Number(r.amount_success || r.success_amount || 0).toLocaleString('ru-RU');
+  const pendingAmt = Number(r.amount_pending || r.pending_amount || 0).toLocaleString('ru-RU');
+  const remainAmt  = Number(r.amount_remain || r.remain_amount || 0).toLocaleString('ru-RU');
+  const limitTotal = Number(r.limit || r.total_limit || 0);
+  const limitUsed  = Number(r.limit_used || r.used || 0);
+  const pct = limitTotal > 0 ? Math.min(100, (limitUsed / limitTotal) * 100) : 0;
+  const minL = Number(r.min_limit || 0).toLocaleString('ru-RU');
+  const maxL = Number(r.max_limit || 0).toLocaleString('ru-RU');
+
+  return `<tr>
+    <td><span style="font-family:monospace;font-size:12px">${esc(r.requisite || r.card || r.number || '—')}</span></td>
+    <td>${esc(r.bank || r.bank_name || '—')}</td>
+    <td style="font-size:12px;color:var(--text-muted)">${esc(r.payment_method || r.method || '—')}</td>
+    <td>
+      <div class="pf-req-progress-wrap">
+        <div style="font-size:11px;color:#22c55e">Успешно: ${successAmt} ₽</div>
+        <div style="font-size:11px;color:#f59e0b">В ожидании: ${pendingAmt} ₽</div>
+        <div style="font-size:11px;color:var(--text-muted)">Осталось: ${remainAmt} ₽</div>
+      </div>
+    </td>
+    <td>
+      <div class="pf-req-progress-bar"><div class="pf-req-progress-fill" style="width:${pct}%"></div></div>
+      <div class="pf-req-limit-txt" style="margin-top:3px">${limitUsed.toLocaleString('ru-RU')} / ${limitTotal.toLocaleString('ru-RU')}</div>
+      <div class="pf-req-limit-txt">MIN: ${minL} ₽ &nbsp; MAX: ${maxL} ₽</div>
+    </td>
+    <td>
+      <button class="pf-toggle ${isActive ? 'on' : 'off'}" onclick="pfToggleReq('${esc(id)}',this)" title="${isActive ? 'Активен' : 'Неактивен'}"></button>
+    </td>
+    <td style="font-size:12px">${esc(r.fio || r.full_name || '—')}</td>
+    <td>
+      <button class="pf-archive-btn" onclick="pfArchiveReq('${esc(id)}')">Архивировать</button>
+    </td>
+  </tr>`;
+}
+
+async function pfToggleReq(id, btn) {
+  btn.disabled = true;
+  try {
+    await api('POST', `/api/v1/payfast/requisites/${encodeURIComponent(id)}/toggle`);
+    btn.classList.toggle('on');
+    btn.classList.toggle('off');
+  } catch(e) {
+    alert('Ошибка: ' + e.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function pfArchiveReq(id) {
+  if (!confirm('Архивировать реквизит?')) return;
+  try {
+    await api('POST', `/api/v1/payfast/requisites/${encodeURIComponent(id)}/archive`);
+    await loadPfRequisites();
+  } catch(e) {
+    alert('Ошибка: ' + e.message);
+  }
+}
+
+// ── Create requisite modal ────────────────────────
+function openPfCreateModal() {
+  // Populate bank dropdown from existing MassMO banks or hardcoded list
+  const bankSel = document.getElementById('pfReqBank');
+  if (bankSel.options.length <= 1) {
+    const banks = [
+      'Сбербанк','Тинькофф','ВТБ','Альфа-банк','Газпромбанк',
+      'Россельхозбанк','Открытие','Совкомбанк','Акбарс банк',
+      'Райффайзен','МКБ','Промсвязьбанк','Уралсиб','Зенит',
+      'Банк Санкт-Петербург','РНКБ','Ак Барс','Точка','МТС Банк',
+    ];
+    banks.forEach(b => { const o = document.createElement('option'); o.value = b; o.textContent = b; bankSel.appendChild(o); });
+  }
+  document.getElementById('pfCreateError').style.display = 'none';
+  document.getElementById('pfCreateConfirmBtn').disabled = false;
+  document.getElementById('pfCreateModal').classList.add('open');
+}
+
+function closePfCreateModal() {
+  document.getElementById('pfCreateModal').classList.remove('open');
+}
+
+function pfCreateModalBgClick(e) {
+  if (e.target === document.getElementById('pfCreateModal')) closePfCreateModal();
+}
+
+async function submitPfCreateRequisite() {
+  const errEl = document.getElementById('pfCreateError');
+  errEl.style.display = 'none';
+  const btn = document.getElementById('pfCreateConfirmBtn');
+
+  const geo = document.getElementById('pfReqGeo').value;
+  const payment_method = document.getElementById('pfReqMethod').value;
+  const bank = document.getElementById('pfReqBank').value;
+  const requisite = document.getElementById('pfReqNumber').value.trim();
+  const fio = document.getElementById('pfReqFio').value.trim();
+  const min_limit = parseFloat(document.getElementById('pfReqMinLimit').value) || 0;
+  const max_limit = parseFloat(document.getElementById('pfReqMaxLimit').value) || 0;
+  const maxOrdersRaw = document.getElementById('pfReqMaxOrders').value.trim();
+  const limit = parseFloat(document.getElementById('pfReqLimit').value) || 0;
+
+  if (!bank) { errEl.textContent = 'Выберите банк'; errEl.style.display=''; return; }
+  if (!requisite) { errEl.textContent = 'Введите реквизит'; errEl.style.display=''; return; }
+  if (!fio) { errEl.textContent = 'Введите ФИО'; errEl.style.display=''; return; }
+  if (!min_limit || !max_limit) { errEl.textContent = 'Укажите лимиты'; errEl.style.display=''; return; }
+
+  const body = { geo, payment_method, bank, requisite, fio, min_limit, max_limit, limit };
+  if (maxOrdersRaw) body.max_active_orders = parseInt(maxOrdersRaw);
+
+  btn.disabled = true;
+  btn.textContent = 'Создаём…';
+  try {
+    await api('POST', '/api/v1/payfast/requisites', body);
+    closePfCreateModal();
+    await loadPfRequisites();
+  } catch(e) {
+    errEl.textContent = 'Ошибка: ' + e.message;
+    errEl.style.display = '';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Подтвердить';
+  }
 }
 
 // ── Session info ──────────────────────────────────

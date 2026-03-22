@@ -151,5 +151,40 @@ class PayfastClient:
         """GET /get_balance_trader → {balance, balance_hold, ...}."""
         return await self._get_req("/get_balance_trader")
 
+    async def proxy_receipt(self, url: str) -> tuple[bytes, str]:
+        """Fetch receipt file from PayFast with Bearer auth.
+
+        Returns (content_bytes, content_type).
+        The receipt URLs from extra_info.file require authentication.
+        """
+        token = await self._get_token()
+        r = await self._client.get(url, headers={"Authorization": f"Bearer {token}"})
+        r.raise_for_status()
+        ct = r.headers.get("content-type", "image/jpeg").split(";")[0].strip()
+        return r.content, ct
+
+    async def get_requisites(self, status: str = "all") -> list[dict]:
+        """POST /get_requisites_trader → list of requisite dicts."""
+        try:
+            data = await self._post("/get_requisites_trader", {"status": status})
+            return data.get("requisites") or []
+        except Exception as exc:
+            logger.warning("Payfast get_requisites failed: %s", exc)
+            return []
+
+    async def create_requisite(self, params: dict) -> dict:
+        """POST /create_requisite_trader → created requisite dict."""
+        return await self._post("/create_requisite_trader", params)
+
+    async def archive_requisite(self, req_id: str) -> None:
+        """Archive a requisite: POST /action_requisite_trader {action:archive}."""
+        await self._post("/action_requisite_trader", {"action": "archive", "id": req_id})
+        logger.info("Payfast: requisite %s archived", req_id)
+
+    async def toggle_requisite(self, req_id: str) -> None:
+        """Toggle requisite active/inactive: POST /action_requisite_trader {action:toggle}."""
+        await self._post("/action_requisite_trader", {"action": "toggle", "id": req_id})
+        logger.info("Payfast: requisite %s toggled", req_id)
+
     async def close(self) -> None:
         await self._client.aclose()
