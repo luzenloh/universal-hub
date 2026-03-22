@@ -491,6 +491,45 @@ body {
   white-space: nowrap; font-family: inherit;
 }
 .mm-upload-btn:hover { opacity: .85; }
+.mm-submit-btn {
+  width: 100%; padding: 9px 0; background: var(--accent); color: #fff; border: none;
+  border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;
+  margin-top: 8px; font-family: inherit; transition: opacity .15s;
+}
+.mm-submit-btn:hover { opacity: .85; }
+.staged-files { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.staged-file-item {
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--input-bg); border: 1px solid var(--input-border);
+  border-radius: 6px; padding: 5px 8px; font-size: 11px; color: var(--text-sub);
+}
+.staged-file-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.staged-file-remove {
+  flex-shrink: 0; background: none; border: none; color: var(--text-muted);
+  cursor: pointer; font-size: 15px; line-height: 1; padding: 0 0 0 6px;
+}
+.staged-file-remove:hover { color: var(--clr-error); }
+.copyable-id {
+  cursor: pointer; text-decoration: underline dotted; text-underline-offset: 2px;
+}
+.copyable-id:hover { color: var(--accent); }
+.copy-tooltip {
+  position: fixed; background: #22c55e; color: #fff; font-size: 11px; font-weight: 600;
+  padding: 4px 10px; border-radius: 6px; pointer-events: none; z-index: 9999;
+  transform: translateX(-50%) translateY(-8px); white-space: nowrap;
+  animation: fadeOutUp .8s ease forwards;
+}
+@keyframes fadeOutUp {
+  0%   { opacity: 1; transform: translateX(-50%) translateY(-8px); }
+  70%  { opacity: 1; }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-24px); }
+}
+.folder-name-badge {
+  font-size: 12px; color: var(--text-muted); padding: 3px 8px;
+  background: var(--input-bg); border: 1px solid var(--input-border);
+  border-radius: 6px; margin-right: 4px; max-width: 180px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 
 /* In-card auth */
 .card-auth {
@@ -786,6 +825,7 @@ body {
     <button class="tab-btn" onclick="switchView('payfast')">PayFast</button>
   </div>
   <div class="navbar-right">
+    <span class="folder-name-badge" id="folderName"></span>
     <span class="session-counter" id="session-counter"></span>
     <div class="nav-load-status" id="navLoadStatus">
       <div class="nav-load-dot"></div>
@@ -938,7 +978,8 @@ function setSessionCounter(data) {
   sessionStorage.setItem('session_counter', JSON.stringify(data));
 }
 function parseAmount(str) {
-  return parseInt((str || '').replace(/\D/g, ''), 10) || 0;
+  const cleaned = (str || '').replace(/[\s,]/g, '').replace(/[^\d.]/g, '');
+  return Math.round(parseFloat(cleaned) || 0);
 }
 function updateSessionCounterDisplay() {
   const { count, total } = getSessionCounter();
@@ -1438,7 +1479,7 @@ function buildStateBody(w) {
               <div class="state-title">Заявка ожидает оплаты</div>
               ${p.amount ? `<div class="state-sub" style="font-size:20px;font-weight:700;color:var(--clr-active);margin-bottom:4px">${esc(p.amount)}</div>` : ''}
               ${deadline ? `<div class="state-sub" style="margin-bottom:4px">Истекает: <span data-deadline="${esc(deadline)}" style="font-weight:600;color:var(--clr-expiring)">--:--</span></div>` : p.timer ? `<div class="state-sub" style="margin-bottom:4px">Истекает: ${esc(p.timer)}</div>` : ''}
-              ${shortId ? `<div class="state-sub" style="font-size:11px;color:var(--text-muted);margin-bottom:4px">ID: ${esc(shortId)}</div>` : ''}
+              ${shortId ? `<div class="state-sub" style="font-size:11px;color:var(--text-muted);margin-bottom:4px">ID: <span class="copyable-id" onclick="copyOrderId(${JSON.stringify(p.order_id)}, this)">${esc(shortId)}</span></div>` : ''}
               <button class="mm-act-btn mm-btn-red" style="margin-top:6px" onclick="cmd('${id}','CANCEL_PAYOUT',{})">Отменить</button>`;
     }
 
@@ -1451,24 +1492,30 @@ function buildStateBody(w) {
               <div class="state-title" style="color:var(--clr-expiring)">⚠ Истекает время!</div>
               ${p.amount ? `<div class="state-sub" style="font-size:20px;font-weight:700;color:var(--clr-active);margin-bottom:4px">${esc(p.amount)}</div>` : ''}
               ${deadline ? `<div class="state-sub" style="margin-bottom:6px">Истекает: <span data-deadline="${esc(deadline)}" style="font-weight:700;color:var(--clr-expiring)">--:--</span></div>` : p.timer ? `<div class="state-sub" style="margin-bottom:6px">Истекает: ${esc(p.timer)}</div>` : ''}
-              ${shortId ? `<div class="state-sub" style="font-size:11px;color:var(--text-muted);margin-bottom:4px">ID: ${esc(shortId)}</div>` : ''}
+              ${shortId ? `<div class="state-sub" style="font-size:11px;color:var(--text-muted);margin-bottom:4px">ID: <span class="copyable-id" onclick="copyOrderId(${JSON.stringify(p.order_id)}, this)">${esc(shortId)}</span></div>` : ''}
               <button class="mm-act-btn mm-btn-orange" style="margin-top:4px;width:100%" onclick="cmd('${id}','EXTEND_ORDER',{})">⏱ Продлить срок${al !== '' ? ` (осталось: ${al})` : ''}</button>
               <button class="mm-act-btn mm-btn-red" style="margin-top:6px" onclick="cmd('${id}','CANCEL_PAYOUT',{})">Отменить</button>`;
     }
 
-    case 'VERIFICATION':
+    case 'VERIFICATION': {
+      const p = w.payout || {};
+      const shortId = p.order_id ? '#' + String(p.order_id).replace(/-/g,'').slice(0,8) + '…' + String(p.order_id).replace(/-/g,'').slice(-5) : '';
       return `<div class="state-icon-wrap ic-verif"><div class="spinner sp-cyan"></div></div>
               <div class="state-title">Проверка чека</div>
-              <div class="state-sub">Ожидайте проверки...</div>`;
+              <div class="state-sub">Ожидайте проверки...</div>
+              ${shortId ? `<div class="state-sub" style="font-size:11px;color:var(--text-muted);margin-top:4px">ID: <span class="copyable-id" onclick="copyOrderId(${JSON.stringify(p.order_id)}, this)">${esc(shortId)}</span></div>` : ''}`;
+    }
 
     case 'VERIFICATION_FAILED': {
       const p = w.payout || {};
       const deadline = p.timer ? parseDeadline(p.timer) : null;
+      const shortId = p.order_id ? '#' + String(p.order_id).replace(/-/g,'').slice(0,8) + '…' + String(p.order_id).replace(/-/g,'').slice(-5) : '';
       return `<div class="state-icon-wrap ic-error">${svgX('var(--clr-expiring)')}</div>
               <div class="state-title">Платёж не прошел проверку</div>
               <div class="state-sub">Проверьте корректность чека<br>и реквизиты получателя</div>
               ${p.amount ? `<div class="state-sub" style="font-size:18px;font-weight:700;color:var(--clr-active);margin-top:4px">${esc(p.amount)}</div>` : ''}
               ${deadline ? `<div class="state-sub" style="margin-bottom:4px">Истекает: <span data-deadline="${esc(deadline)}" style="font-weight:600;color:var(--clr-expiring)">--:--</span></div>` : p.timer ? `<div class="state-sub" style="margin-bottom:4px">Истекает: ${esc(p.timer)}</div>` : ''}
+              ${shortId ? `<div class="state-sub" style="font-size:11px;color:var(--text-muted);margin-bottom:4px">ID: <span class="copyable-id" onclick="copyOrderId(${JSON.stringify(p.order_id)}, this)">${esc(shortId)}</span></div>` : ''}
               <button class="mm-act-btn mm-btn-red" style="margin-top:6px" onclick="cmd('${id}','CANCEL_PAYOUT',{})">Отменить</button>`;
     }
 
@@ -1546,7 +1593,7 @@ function buildInfoSection(w) {
     const shortId = p.order_id ? '#' + String(p.order_id).replace(/-/g,'').slice(0,8) + '…' + String(p.order_id).replace(/-/g,'').slice(-5) : '';
     return `<div class="mm-info-section">
       ${p.amount ? `<div class="mm-info-row"><span class="mm-ir-label">Сумма выплаты</span><span class="mm-ir-value big">${esc(p.amount)}</span></div>` : ''}
-      ${shortId ? `<div class="mm-info-row"><span class="mm-ir-label">ID выплаты</span><span class="mm-ir-value" style="font-size:12px;color:var(--text-muted)">${esc(shortId)}</span></div>` : ''}
+      ${shortId ? `<div class="mm-info-row"><span class="mm-ir-label">ID выплаты</span><span class="mm-ir-value" style="font-size:12px;color:var(--text-muted)"><span class="copyable-id" onclick="copyOrderId(${JSON.stringify(p.order_id)}, this)">${esc(shortId)}</span></span></div>` : ''}
       ${p.bank ? `<div class="mm-bank-block"><div class="mm-bank-name">${esc(p.bank)}</div>${p.recipient ? `<div class="mm-bank-phone">${esc(p.recipient)}</div>` : ''}</div>` : ''}
       <div class="mm-next-btn" onclick="cmd('${id}','REQUEST_PAYOUT',{})">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 5l7 7-7 7" stroke="#60a5fa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -1564,27 +1611,43 @@ function buildControls(w) {
   if (['ACTIVE_PAYOUT','EXPIRING','VERIFICATION_FAILED'].includes(w.status)) {
     h += `<div class="mm-ctrl-title">Чек</div>
     <div class="drop-zone" id="drop-${id}"
+         onclick="triggerFileInput('${id}')"
          ondragover="event.preventDefault();document.getElementById('drop-${id}').classList.add('drag-over')"
          ondragleave="document.getElementById('drop-${id}').classList.remove('drag-over')"
          ondrop="handleDrop(event,'${id}')">
-      Перетащите файл сюда или
+      📎 Перетащите файлы или нажмите для выбора
     </div>
-    <div class="mm-upload-row">
-      <input type="file" accept=".pdf,.jpg,.jpeg,.png" id="file-${id}">
-      <button class="mm-upload-btn" onclick="uploadReceiptFromInput('${id}')">Загрузить</button>
-    </div>`;
+    <input type="file" accept=".pdf,.jpg,.jpeg,.png" multiple id="file-${id}" style="display:none" onchange="handleFileInputChange('${id}')">
+    <div class="staged-files" id="staged-${id}"></div>
+    <button class="mm-submit-btn" id="submit-btn-${id}" style="display:none" onclick="submitStagedFiles('${id}')">Отправить на проверку</button>`;
   }
   h += '</div>';
   return h;
 }
 
-// ── Clipboard copy (Feature 2) ────────────────────
+// ── Clipboard copy ────────────────────────────────
+function showCopyTooltip(el, text) {
+  const rect = el.getBoundingClientRect();
+  const tip = document.createElement('div');
+  tip.className = 'copy-tooltip';
+  tip.textContent = text || 'Скопировано!';
+  tip.style.left = (rect.left + rect.width / 2) + 'px';
+  tip.style.top = (rect.top + window.scrollY) + 'px';
+  document.body.appendChild(tip);
+  tip.addEventListener('animationend', () => tip.remove());
+}
+
 function copyRecipient(text, btn) {
   navigator.clipboard.writeText(text).then(() => {
-    const orig = btn.innerHTML;
     btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
     btn.style.color = '#22c55e';
-    setTimeout(() => { btn.innerHTML = orig; btn.style.color = ''; }, 1500);
+    showCopyTooltip(btn, 'Скопировано!');
+  }).catch(() => {});
+}
+
+function copyOrderId(orderId, el) {
+  navigator.clipboard.writeText(orderId).then(() => {
+    showCopyTooltip(el, 'Скопировано!');
   }).catch(() => {});
 }
 
@@ -1765,18 +1828,61 @@ async function cmd(windowId, type, params) {
   }
 }
 
-async function uploadReceiptFromInput(windowId) {
-  const input = document.getElementById('file-' + windowId);
-  if (!input || !input.files[0]) { log('Выберите файл'); return; }
-  await uploadReceiptFile(windowId, input.files[0]);
+// ── Multi-file staging ────────────────────────────
+const _stagedFiles = {}; // windowId → File[]
+
+function triggerFileInput(windowId) {
+  document.getElementById('file-' + windowId)?.click();
 }
 
-async function uploadReceiptFile(windowId, file) {
+function handleFileInputChange(windowId) {
+  const input = document.getElementById('file-' + windowId);
+  if (!input || !input.files.length) return;
+  stageFiles(windowId, Array.from(input.files));
+  input.value = '';
+}
+
+function stageFiles(windowId, newFiles) {
+  if (!_stagedFiles[windowId]) _stagedFiles[windowId] = [];
+  _stagedFiles[windowId].push(...newFiles);
+  renderStagedFiles(windowId);
+}
+
+function removeStagedFile(windowId, idx) {
+  if (_stagedFiles[windowId]) {
+    _stagedFiles[windowId].splice(idx, 1);
+    renderStagedFiles(windowId);
+  }
+}
+
+function renderStagedFiles(windowId) {
+  const container = document.getElementById('staged-' + windowId);
+  const submitBtn = document.getElementById('submit-btn-' + windowId);
+  const files = _stagedFiles[windowId] || [];
+  if (!container) return;
+  container.innerHTML = files.map((f, i) => `
+    <div class="staged-file-item">
+      <span class="staged-file-name">${esc(f.name)}</span>
+      <button class="staged-file-remove" onclick="removeStagedFile('${windowId}',${i})" title="Удалить">×</button>
+    </div>`).join('');
+  if (submitBtn) submitBtn.style.display = files.length ? '' : 'none';
+}
+
+async function submitStagedFiles(windowId) {
+  const files = _stagedFiles[windowId];
+  if (!files || !files.length) return;
+  const toSend = [...files];
+  _stagedFiles[windowId] = [];
+  renderStagedFiles(windowId);
+  await uploadReceiptFiles(windowId, toSend);
+}
+
+async function uploadReceiptFiles(windowId, files) {
   const card = document.getElementById('card-' + windowId);
   if (card) card.classList.add('card-loading');
   const formData = new FormData();
-  formData.append('file', file);
-  log(`[${windowId}] Загрузка чека: ${file.name}…`);
+  files.forEach(f => formData.append('files', f));
+  log(`[${windowId}] Загрузка ${files.length} файл(ов)…`);
   try {
     const res = await fetch(`/api/v1/windows/${windowId}/upload`, { method: 'POST', body: formData });
     const data = await res.json();
@@ -1788,12 +1894,17 @@ async function uploadReceiptFile(windowId, file) {
   }
 }
 
+// Keep single-file upload for paste modal
+async function uploadReceiptFile(windowId, file) {
+  await uploadReceiptFiles(windowId, [file]);
+}
+
 function handleDrop(event, windowId) {
   event.preventDefault();
   const dropEl = document.getElementById('drop-' + windowId);
   if (dropEl) dropEl.classList.remove('drag-over');
-  const file = event.dataTransfer.files[0];
-  if (file) uploadReceiptFile(windowId, file);
+  const files = Array.from(event.dataTransfer.files);
+  if (files.length) stageFiles(windowId, files);
 }
 
 // ── Helpers ────────────────────────────────────────
@@ -1820,13 +1931,25 @@ let bankMap  = {};
 let _bankModalTarget = null;
 
 async function loadBanks() {
+  // Load from localStorage cache first (so logos work even without active agents)
   try {
-    bankList = await api('GET', '/api/v1/banks');
+    const cached = localStorage.getItem('bankList_v1');
+    if (cached) {
+      bankList = JSON.parse(cached);
+      bankMap = {};
+      bankList.forEach(b => { bankMap[b.alias] = b; });
+    }
+  } catch(e) {}
+  // Then refresh from API
+  try {
+    const fresh = await api('GET', '/api/v1/banks');
+    bankList = fresh;
     bankMap = {};
     bankList.forEach(b => { bankMap[b.alias] = b; });
+    try { localStorage.setItem('bankList_v1', JSON.stringify(bankList)); } catch(e) {}
     log(`Загружено ${bankList.length} банков`);
   } catch(e) {
-    log('Банки не загружены: ' + e.message);
+    if (!bankList.length) log('Банки не загружены: ' + e.message);
   }
 }
 
@@ -2368,10 +2491,20 @@ function pfModalBgClick(e) {
   if (e.target === document.getElementById('pfReceiptModal')) closePfReceiptModal();
 }
 
+// ── Session info ──────────────────────────────────
+async function loadSessionInfo() {
+  try {
+    const info = await api('GET', '/api/v1/session-info');
+    const el = document.getElementById('folderName');
+    if (el) el.textContent = info.folder_name || '';
+  } catch(e) {}
+}
+
 // ── Init ──────────────────────────────────────────
 connectWS();
 renderAll();
 loadBanks();
+loadSessionInfo();
 (async () => {
   try {
     const windows = await api('GET', '/api/v1/windows');

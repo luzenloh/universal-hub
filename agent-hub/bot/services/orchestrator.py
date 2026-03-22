@@ -43,6 +43,15 @@ class Orchestrator:
         self._cache_lock = asyncio.Lock()
         self._inbound_controllers: dict[str, InboundController] = {}  # window_id → controller
         self._shift_secrets: dict | None = None  # payfast/montera config for current shift
+        self._folder_name: str = ""
+
+    # ------------------------------------------------------------------ folder info
+
+    def set_folder_name(self, name: str) -> None:
+        self._folder_name = name or ""
+
+    def get_folder_name(self) -> str:
+        return self._folder_name
 
     # ------------------------------------------------------------------ shift secrets (inbound)
 

@@ -310,38 +310,53 @@ class MassmoClient:
         else:
             logger.info("[%s] Order extended by 30 minutes", self.label)
 
-    async def upload_receipt(self, file_path: str) -> None:
-        """Upload receipt. Endpoint: POST /payout_orders/{id}/verification, field: proofs[]"""
+    async def upload_receipt(self, file_paths: list[str]) -> None:
+        """Upload one or more receipts. Endpoint: POST /payout_orders/{id}/verification, field: proofs[]"""
         order_id = self._active_order_id
         if order_id is None:
             raise RuntimeError(f"[{self.label}] No active order to upload receipt for")
+        if not file_paths:
+            raise RuntimeError(f"[{self.label}] No files provided for upload")
 
         url = f"{_API_BASE}/payout_orders/{order_id}/verification"
-        mime = "image/jpeg"
-        fname = file_path.split("/")[-1]
-        if fname.lower().endswith(".png"):
-            mime = "image/png"
-        elif fname.lower().endswith(".pdf"):
-            mime = "application/pdf"
 
+        def _mime(path: str) -> str:
+            lower = path.lower()
+            if lower.endswith(".png"):
+                return "image/png"
+            if lower.endswith(".pdf"):
+                return "application/pdf"
+            return "image/jpeg"
+
+        handles = []
         try:
-            with open(file_path, "rb") as f:
-                data = {}
-                if self._sender_bank_name:
-                    data["sender_bank_name"] = self._sender_bank_name
-                r = await self._client.post(
-                    url,
-                    files={"proofs[]": (fname, f, mime)},
-                    data=data,
-                    headers={"Authorization": f"Bearer {self._jwt}"},
-                )
+            files = []
+            for fp in file_paths:
+                fname = fp.split("/")[-1]
+                fh = open(fp, "rb")
+                handles.append(fh)
+                files.append(("proofs[]", (fname, fh, _mime(fp))))
+
+            data = {}
+            if self._sender_bank_name:
+                data["sender_bank_name"] = self._sender_bank_name
+
+            r = await self._client.post(
+                url,
+                files=files,
+                data=data,
+                headers={"Authorization": f"Bearer {self._jwt}"},
+            )
             if r.status_code not in (200, 201, 204):
                 logger.warning("[%s] upload_receipt: %d — body: %s",
                                self.label, r.status_code, r.text[:300])
             else:
-                logger.info("[%s] Receipt uploaded OK", self.label)
-        except FileNotFoundError:
-            raise RuntimeError(f"Receipt file not found: {file_path}")
+                logger.info("[%s] Receipt uploaded OK (%d file(s))", self.label, len(file_paths))
+        except FileNotFoundError as exc:
+            raise RuntimeError(f"Receipt file not found: {exc}")
+        finally:
+            for fh in handles:
+                fh.close()
 
     # ------------------------------------------------------------------ settings (existing API)
 

@@ -4,7 +4,7 @@ import os
 import tempfile
 
 import httpx
-from fastapi import APIRouter, HTTPException, Request, UploadFile
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 
 from bot.services.orchestrator import Orchestrator
 from web.models.schemas import (
@@ -169,28 +169,38 @@ async def send_command(window_id: str, body: CommandRequest, request: Request) -
 
 
 @router.post("/windows/{window_id}/upload", response_model=CommandResult)
-async def upload_receipt(window_id: str, file: UploadFile, request: Request) -> CommandResult:
-    """Upload a PDF receipt for the given window."""
-    # Save to temp file, then send UPLOAD_RECEIPT command with path
-    content = await file.read()
-    if len(content) > 10 * 1024 * 1024:
-        raise HTTPException(status_code=413, detail="File too large (max 10 MB)")
+async def upload_receipt(
+    window_id: str,
+    request: Request,
+    files: list[UploadFile] = File(...),
+) -> CommandResult:
+    """Upload one or more receipt files for the given window."""
     ALLOWED_TYPES = {"image/jpeg", "image/png", "application/pdf"}
-    if file.content_type not in ALLOWED_TYPES:
-        raise HTTPException(status_code=415, detail=f"Unsupported type: {file.content_type}")
-
-    suffix = os.path.splitext(file.filename or "receipt.pdf")[1] or ".pdf"
-    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-        tmp.write(content)
-        tmp_path = tmp.name
-
-    cmd = CommandRequest(type=CommandType.UPLOAD_RECEIPT, params={"path": tmp_path})
-    result = await _orchestrator(request).send_command(window_id, cmd)
-
-    # Cleanup temp file after command (best effort)
+    tmp_paths: list[str] = []
     try:
-        os.unlink(tmp_path)
-    except Exception:
-        pass
+        for f in files:
+            content = await f.read()
+            if len(content) > 10 * 1024 * 1024:
+                raise HTTPException(status_code=413, detail=f"{f.filename}: file too large (max 10 MB)")
+            if f.content_type not in ALLOWED_TYPES:
+                raise HTTPException(status_code=415, detail=f"Unsupported type: {f.content_type}")
+            suffix = os.path.splitext(f.filename or "receipt.jpg")[1] or ".jpg"
+            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+                tmp.write(content)
+                tmp_paths.append(tmp.name)
 
-    return result
+        cmd = CommandRequest(type=CommandType.UPLOAD_RECEIPT, params={"paths": tmp_paths})
+        return await _orchestrator(request).send_command(window_id, cmd)
+    finally:
+        for p in tmp_paths:
+            try:
+                os.unlink(p)
+            except Exception:
+                pass
+
+
+@router.get("/session-info")
+async def get_session_info(request: Request) -> dict:
+    """Return current session metadata (folder name, etc.)."""
+    orch = _orchestrator(request)
+    return {"folder_name": orch.get_folder_name()}

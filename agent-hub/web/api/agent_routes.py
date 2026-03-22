@@ -34,6 +34,7 @@ async def start_shift(body: AgentStartRequest, request: Request) -> dict[str, st
         {f"M{i+1}": pid for i, pid in enumerate(body.numbered_profile_ids)}
     )
     await orchestrator.begin_fresh_session()
+    orchestrator.set_folder_name(body.folder_name)
 
     # Store inbound platform secrets if provided in extended format
     if isinstance(body.massmo_secrets, dict):

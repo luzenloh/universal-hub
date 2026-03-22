@@ -269,7 +269,10 @@ class WindowAgent:
                 await self._client.select_bank(cmd.params.get("bank", ""))
 
             elif cmd.type == CommandType.UPLOAD_RECEIPT:
-                await self._client.upload_receipt(cmd.params.get("path", ""))
+                paths = cmd.params.get("paths") or []
+                if not paths and cmd.params.get("path"):
+                    paths = [cmd.params["path"]]
+                await self._client.upload_receipt([p for p in paths if p])
                 await asyncio.sleep(0.3)
                 await self._poll()
 
