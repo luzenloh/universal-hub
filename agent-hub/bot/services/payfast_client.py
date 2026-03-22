@@ -163,15 +163,30 @@ class PayfastClient:
         ct = r.headers.get("content-type", "image/jpeg").split(";")[0].strip()
         return r.content, ct
 
-    async def get_requisites(self, page: int = 1, limit: int = 50, status: str = "all") -> dict:
+    async def get_requisites(self, page: int = 1, limit: int = 50) -> dict:
         """POST /get_bills → {data: [...], totalPages: N}."""
-        try:
-            result = await self._post("/get_bills", {"status": status, "page": page, "limit": limit})
-            logger.info("Payfast get_bills raw: keys=%s data_len=%s", list(result.keys()), len(result.get("data") or []))
-            return result
-        except Exception as exc:
-            logger.warning("Payfast get_requisites failed: %s", exc)
-            return {"data": [], "totalPages": 0}
+        token = await self._get_token()
+        headers = self._headers(token)
+        bodies_to_try = [
+            {},
+            {"page": page, "limit": limit},
+            {"type": "checks"},
+            {"type": "checks", "page": page, "limit": limit},
+        ]
+        for body in bodies_to_try:
+            try:
+                r = await self._client.post(f"{self.BASE}/get_bills", json=body, headers=headers)
+                if r.status_code == 200:
+                    result = r.json()
+                    logger.info("Payfast get_bills OK body=%s keys=%s data_len=%s",
+                                body, list(result.keys()), len(result.get("data") or []))
+                    return result
+                else:
+                    logger.warning("Payfast get_bills %d body=%s resp=%s",
+                                   r.status_code, body, r.text[:200])
+            except Exception as exc:
+                logger.warning("Payfast get_bills exception body=%s: %s", body, exc)
+        return {"data": [], "totalPages": 0}
 
     async def create_requisite(self, params: dict) -> dict:
         """POST /create_bill → created requisite dict."""
